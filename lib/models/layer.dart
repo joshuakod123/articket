@@ -1,0 +1,87 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+
+/// 에디터 캔버스에 올라가는 요소의 종류.
+enum LayerKind { sticker, text, tape, photo }
+
+/// 스크랩북 캔버스의 레이어 하나.
+///
+/// 좌표는 캔버스 크기에 대한 0.0~1.0 비율로 저장합니다.
+/// 화면 크기가 달라져도 배치가 유지되고, 서버에 그대로 직렬화할 수 있습니다.
+class ScrapLayer {
+  ScrapLayer({
+    required this.id,
+    required this.kind,
+    required this.content,
+    this.dx = 0.5,
+    this.dy = 0.5,
+    this.scale = 1.0,
+    this.rotation = 0.0,
+    this.color = 0xFFE8E2D4,
+    this.fontSize = 16,
+  });
+
+  final String id;
+  final LayerKind kind;
+
+  /// sticker → 이모지 글리프 / text → 문자열 / tape → 색상 이름 / photo → 경로
+  String content;
+
+  double dx;
+  double dy;
+  double scale;
+
+  /// 라디안.
+  double rotation;
+
+  int color;
+  double fontSize;
+
+  Offset offsetIn(Size canvas) => Offset(dx * canvas.width, dy * canvas.height);
+
+  ScrapLayer copyWith({String? id, String? content}) => ScrapLayer(
+    id: id ?? this.id,
+    kind: kind,
+    content: content ?? this.content,
+    dx: dx,
+    dy: dy,
+    scale: scale,
+    rotation: rotation,
+    color: color,
+    fontSize: fontSize,
+  );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'kind': kind.name,
+    'content': content,
+    'dx': dx,
+    'dy': dy,
+    'scale': scale,
+    'rotation': rotation,
+    'color': color,
+    'fontSize': fontSize,
+  };
+
+  factory ScrapLayer.fromMap(Map<String, dynamic> m) => ScrapLayer(
+    id: m['id'] as String,
+    kind: LayerKind.values.firstWhere(
+          (e) => e.name == m['kind'],
+      orElse: () => LayerKind.sticker,
+    ),
+    content: m['content'] as String,
+    dx: (m['dx'] as num).toDouble(),
+    dy: (m['dy'] as num).toDouble(),
+    scale: (m['scale'] as num).toDouble(),
+    rotation: (m['rotation'] as num).toDouble(),
+    color: m['color'] as int,
+    fontSize: (m['fontSize'] as num).toDouble(),
+  );
+
+  static String encodeList(List<ScrapLayer> layers) =>
+      jsonEncode(layers.map((l) => l.toMap()).toList());
+
+  static List<ScrapLayer> decodeList(String raw) => (jsonDecode(raw) as List)
+      .map((e) => ScrapLayer.fromMap(e as Map<String, dynamic>))
+      .toList();
+}
