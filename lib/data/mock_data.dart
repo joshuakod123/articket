@@ -8,13 +8,13 @@ import '../theme/app_colors.dart';
 final List<ArchiveFolder> mockFolders = [
   ArchiveFolder(
     id: 'f2026',
-    label: 'ARCHIVE / 2026',
+    label: '2026 ARCHIVE',
     subtitle: '올해 다녀온 전시',
     color: AppColors.tabColors[0],
   ),
   ArchiveFolder(
     id: 'f2025',
-    label: 'ARCHIVE / 2025',
+    label: '2025 ARCHIVE',
     subtitle: '작년 기록',
     color: AppColors.tabColors[1],
   ),
@@ -26,7 +26,7 @@ final List<ArchiveFolder> mockFolders = [
   ),
   ArchiveFolder(
     id: 'fphoto',
-    label: 'PHOTOGRAPHY',
+    label: 'PHOTO',
     subtitle: '사진전',
     color: AppColors.tabColors[3],
   ),

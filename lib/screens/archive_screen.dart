@@ -7,6 +7,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/folder_open_route.dart';
 import '../widgets/index_tab.dart';
+import '../widgets/nav_icons.dart';
 import '../widgets/paper.dart';
 import 'folder_screen.dart';
 import 'market_screen.dart';
@@ -29,10 +30,10 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   /// 열림 전환에서 서류철의 화면 좌표를 읽기 위한 키.
   final _cardKeys = <String, GlobalKey>{};
 
-  static const _folderHeight = 168.0;
+  static const _folderHeight = FolderMetrics.cardHeight;
 
-  /// 다음 서류철이 이만큼 아래에서 시작해 몸통을 덮습니다.
-  static const _step = 118.0;
+  /// 다음 서류철이 이만큼 아래에서 시작해 앞 서류철 몸통을 덮습니다.
+  static const _step = FolderMetrics.step;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +63,18 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                           height: stackHeight,
                           child: Stack(
                             children: [
-                              for (var i = 0; i < folders.length; i++)
+                              // 겹친 경계마다 [접촉 그림자 → 서류철] 순서로 쌓습니다.
+                              for (var i = 0; i < folders.length; i++) ...[
+                                if (i > 0)
+                                  Positioned(
+                                    top: i * _step +
+                                        FolderMetrics.tabHeight -
+                                        22,
+                                    left: 0,
+                                    right: 0,
+                                    height: 22,
+                                    child: const LayerShadow(),
+                                  ),
                                 AnimatedPositioned(
                                   duration: const Duration(milliseconds: 240),
                                   curve: Curves.easeOutCubic,
@@ -79,13 +91,14 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                                       totalSlots: 3,
                                       fileNo: i + 1,
                                       lifted: _lifted == i,
-                                      photo: _photoOf(folders[i].id),
+                                      preview: store.ticketsIn(folders[i].id),
                                       onTap: () => _open(folders[i], i),
                                       onLongPress: () =>
                                           _folderMenu(folders[i]),
                                     ),
                                   ),
                                 ),
+                              ],
                               if (folders.isEmpty)
                                 Center(
                                   child: Text('서류철이 없습니다. 오른쪽 위 +로 만드세요',
@@ -104,7 +117,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
             ),
           ),
           // 플라스터 벽 질감.
-          const WallGrain(),
+          const WallGrain(opacity: 0.04),
         ],
       ),
       bottomNavigationBar: const _BottomBar(),
@@ -112,13 +125,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   }
 
   GlobalKey _keyOf(String id) => _cardKeys.putIfAbsent(id, GlobalKey.new);
-
-  /// 폴라로이드에 쓸 색. 가장 최근 티켓의 포스터에서 가져옵니다.
-  List<Color> _photoOf(String folderId) {
-    final tickets = store.ticketsIn(folderId);
-    if (tickets.isEmpty) return const [];
-    return tickets.first.posterTint;
-  }
 
   // ── 열기 (표지가 젖혀지는 전환) ─────────────────────
 
@@ -281,7 +287,7 @@ class _FolderFormState extends State<_FolderForm> {
     // 라벨을 비우면 순번으로 자동 생성합니다.
     var label = _label.text.trim().toUpperCase();
     if (label.isEmpty) {
-      label = 'FILE / ${(widget.store.folders.length + 1).toString().padLeft(2, '0')}';
+      label = 'FILE ${(widget.store.folders.length + 1).toString().padLeft(2, '0')}';
     }
 
     if (_isNew) {
@@ -318,7 +324,7 @@ class _FolderFormState extends State<_FolderForm> {
               style: AppText.eyebrow(color: AppColors.foil)),
           const SizedBox(height: 16),
           _field('이름', _name, hint: '예: 올해 다녀온 전시'),
-          _field('탭 라벨 (영문, 비우면 자동)', _label, hint: 'ARCHIVE / 2026'),
+          _field('탭 라벨 (짧은 영문, 비우면 자동)', _label, hint: '2026 ARCHIVE'),
           const SizedBox(height: 8),
           Text('색', style: AppText.ui(size: 12, color: AppColors.inkSoft)),
           const SizedBox(height: 10),
@@ -456,38 +462,44 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stockLight,
+        color: AppColors.stock,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 58,
-          child: Row(
-            children: [
-              _item(context, Icons.folder_copy_outlined, '아카이브', true, null),
-              _item(context, Icons.storefront_outlined, '마켓', false, () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MarketScreen()),
-                );
-              }),
-              _item(context, Icons.calendar_today_outlined, '캘린더', false, () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('문화 캘린더는 Phase 2에서 붙습니다')),
-                );
-              }),
-              _item(context, Icons.person_outline, '내 정보', false, null),
-            ],
+      child: Stack(
+        children: [
+          // 탭바도 종이 위입니다.
+          const WallGrain(opacity: 0.05, seed: 12),
+          SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 60,
+              child: Row(
+                children: [
+                  _item(context, NavSymbol.stamp, '아카이브', true, null),
+                  _item(context, NavSymbol.tag, '마켓', false, () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const MarketScreen()),
+                    );
+                  }),
+                  _item(context, NavSymbol.dateStamp, '캘린더', false, () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('문화 캘린더는 Phase 2에서 붙습니다')),
+                    );
+                  }),
+                  _item(context, NavSymbol.pin, '내 정보', false, null),
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _item(BuildContext context, IconData icon, String label, bool active,
-      VoidCallback? onTap) {
+  Widget _item(BuildContext context, NavSymbol symbol, String label,
+      bool active, VoidCallback? onTap) {
     final color = active ? AppColors.oxblood : AppColors.inkSoft;
     return Expanded(
       child: InkWell(
@@ -495,8 +507,8 @@ class _BottomBar extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(height: 4),
+            NavIcon(symbol: symbol, color: color, size: 21, filled: active),
+            const SizedBox(height: 5),
             Text(label,
                 style: AppText.ui(
                     size: 10,

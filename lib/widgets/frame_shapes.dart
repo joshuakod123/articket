@@ -24,11 +24,13 @@ CustomClipper<Path> clipperFor(TicketFrame frame) {
 
 /// 좌우(또는 상하)에 반원 타공을 뚫는 표준 티켓.
 class _NotchClipper extends CustomClipper<Path> {
-  _NotchClipper({required this.vertical, required this.at, this.radius = 9});
+  _NotchClipper({required this.vertical, required this.at});
 
   final bool vertical;
   final double at;
-  final double radius;
+
+  /// 반원 타공 반지름. 호출부에서 바꿀 일이 없어 상수로 둡니다.
+  static const radius = 9.0;
 
   @override
   Path getClip(Size size) {
