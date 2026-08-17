@@ -97,7 +97,8 @@ class FolderCard extends StatelessWidget {
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
               transform: Matrix4.translationValues(0, lifted ? -10 : 0, 0),
-              decoration: BoxDecoration(boxShadow: paperShadow(depth: lifted ? 1.3 : 0.8)),
+              decoration:
+              BoxDecoration(boxShadow: paperShadow(depth: lifted ? 1.2 : 0.7)),
               child: ClipPath(
                 clipper: FolderShape(
                   tabStart: tabStart,
@@ -128,7 +129,7 @@ class FolderCard extends StatelessWidget {
                         style: AppText.data(
                           size: 9,
                           weight: FontWeight.w700,
-                          color: AppColors.stockLight.withValues(alpha: .9),
+                          color: AppColors.stockLight.withValues(alpha: .92),
                         ),
                       ),
                     ),
@@ -161,7 +162,8 @@ class FolderCard extends StatelessWidget {
                                   count == 0 ? '비어 있음' : '$count장 보관',
                                   style: AppText.data(
                                     size: 10,
-                                    color: AppColors.stock.withValues(alpha: .6),
+                                    color:
+                                    AppColors.stock.withValues(alpha: .72),
                                   ),
                                 ),
                               ],
@@ -187,8 +189,8 @@ class FolderCard extends StatelessWidget {
                                           borderRadius:
                                           BorderRadius.circular(2),
                                           border: Border.all(
-                                            color: AppColors.ink
-                                                .withValues(alpha: .25),
+                                            color: AppColors.stockLight
+                                                .withValues(alpha: .35),
                                           ),
                                         ),
                                       ),

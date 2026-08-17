@@ -8,6 +8,17 @@ import 'paper.dart';
 import 'poster.dart';
 import 'ticket_clipper.dart' show Barcode;
 
+/// 티켓은 "인쇄물"이라 시스템 글자 배율을 따라가면 레이아웃이 넘칩니다.
+/// (RenderFlex overflow의 주범) 내부 글자는 배율을 고정합니다.
+Widget _asPrint(BuildContext context, Widget child) {
+  final mq = MediaQuery.maybeOf(context);
+  if (mq == null) return child;
+  return MediaQuery(
+    data: mq.copyWith(textScaler: TextScaler.noScaling),
+    child: child,
+  );
+}
+
 /// 티켓 앞면. 프레임에 따라 실루엣과 정보 배치가 달라집니다.
 class TicketFront extends StatelessWidget {
   const TicketFront({
@@ -27,12 +38,15 @@ class TicketFront extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipPath(
-      clipper: clipperFor(ticket.frame),
-      child: PaperSurface(
-        color: AppColors.stockLight,
-        seed: ticket.serial.hashCode,
-        child: ticket.frame.horizontal ? _horizontal() : _vertical(),
+    return _asPrint(
+      context,
+      ClipPath(
+        clipper: clipperFor(ticket.frame),
+        child: PaperSurface(
+          color: AppColors.stockLight,
+          seed: ticket.serial.hashCode,
+          child: ticket.frame.horizontal ? _horizontal() : _vertical(),
+        ),
       ),
     );
   }
@@ -167,68 +181,85 @@ class _CompactStub extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Flexible(
-          child: Text(
-            ticket.dateLabel,
-            maxLines: 1,
-            overflow: TextOverflow.clip,
-            style: AppText.data(size: 8, spacing: 0.4, color: AppColors.ink),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.topLeft,
+            child: Text(
+              ticket.dateLabel,
+              maxLines: 1,
+              style: AppText.data(size: 8, spacing: 0.4, color: AppColors.ink),
+            ),
           ),
         ),
-        Flexible(
-          child: Align(
-            alignment: Alignment.bottomLeft,
-            child: Barcode(serial: ticket.serial, height: 10),
-          ),
-        ),
+        const Spacer(),
+        Barcode(serial: ticket.serial, height: 10),
       ],
     );
   }
 }
 
 /// 세로형 티켓의 아래 스텁. 날짜·장소 + 바코드.
+/// 스텁이 아무리 좁아져도(작은 기기·큰 글자 배율) 넘치지 않도록
+/// FittedBox로 감싸 필요 시 축소되게 했습니다.
 class _FullStub extends StatelessWidget {
   const _FullStub({required this.ticket});
   final Ticket ticket;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(child: _field('DATE', ticket.dateLabel)),
-              Flexible(child: _field('VENUE', ticket.venue)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 92,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Barcode(serial: ticket.serial, height: 22),
-              const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(ticket.serial,
-                    style: AppText.data(
-                        size: 8, spacing: 0.6, color: AppColors.inkSoft)),
+    return LayoutBuilder(
+      builder: (context, c) {
+        final infoWidth = (c.maxWidth - 104).clamp(40.0, 1000.0);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(child: _fit(infoWidth, _field('DATE', ticket.dateLabel))),
+                  const SizedBox(height: 8),
+                  Flexible(child: _fit(infoWidth, _field('VENUE', ticket.venue))),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+            const SizedBox(width: 12),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: SizedBox(
+                width: 92,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Barcode(serial: ticket.serial, height: 22),
+                    const SizedBox(height: 4),
+                    Text(ticket.serial,
+                        maxLines: 1,
+                        style: AppText.data(
+                            size: 8, spacing: 0.6, color: AppColors.inkSoft)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
+
+  /// 폭은 [maxW]에서 말줄임, 높이가 모자라면 통째로 축소.
+  Widget _fit(double maxW, Widget child) => FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: Alignment.centerLeft,
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxW),
+      child: child,
+    ),
+  );
 
   Widget _field(String label, String value) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,14 +295,16 @@ class _SideStub extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(ticket.shortDate,
-              style: AppText.data(
-                  size: compact ? 9 : 12,
-                  spacing: 0.6,
-                  weight: FontWeight.w700,
-                  color: AppColors.ink)),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(ticket.shortDate,
+                style: AppText.data(
+                    size: compact ? 9 : 12,
+                    spacing: 0.6,
+                    weight: FontWeight.w700,
+                    color: AppColors.ink)),
+          ),
         ),
         Expanded(
           child: RotatedBox(
@@ -281,10 +314,13 @@ class _SideStub extends StatelessWidget {
             ),
           ),
         ),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text('★${ticket.rating}',
-              style: AppText.data(size: compact ? 8 : 10, color: AppColors.foil)),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('★${ticket.rating}',
+                style:
+                AppText.data(size: compact ? 8 : 10, color: AppColors.foil)),
+          ),
         ),
       ],
     );
@@ -292,6 +328,8 @@ class _SideStub extends StatelessWidget {
 }
 
 /// 티켓 뒷면. 별점 · 한 줄 평 · 감상문.
+/// 가로형처럼 높이가 짧은 프레임에서도 넘치지 않도록
+/// 고정 요소를 줄이고 감상문 영역이 0까지 줄어들 수 있게 했습니다.
 class TicketBack extends StatelessWidget {
   const TicketBack({super.key, required this.ticket});
 
@@ -299,79 +337,87 @@ class TicketBack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipPath(
-      clipper: clipperFor(ticket.frame),
-      child: PaperSurface(
-        color: AppColors.stock,
-        seed: ticket.serial.hashCode + 1,
-        grain: 0.07,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text('DIARY', style: AppText.eyebrow(color: AppColors.oxblood)),
-                  const Spacer(),
-                  Flexible(
-                    child: Text('NO. ${ticket.serial.split('-').last}',
+    final short = ticket.frame.horizontal;
+
+    return _asPrint(
+      context,
+      ClipPath(
+        clipper: clipperFor(ticket.frame),
+        child: PaperSurface(
+          color: AppColors.stock,
+          seed: ticket.serial.hashCode + 1,
+          grain: 0.07,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(18, short ? 14 : 20, 18, short ? 12 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('DIARY',
+                        style: AppText.eyebrow(color: AppColors.oxblood)),
+                    const Spacer(),
+                    Flexible(
+                      child: Text('NO. ${ticket.serial.split('-').last}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.data(
+                              size: 9, spacing: 0.6, color: AppColors.inkSoft)),
+                    ),
+                  ],
+                ),
+                SizedBox(height: short ? 8 : 12),
+                _Stars(rating: ticket.rating),
+                SizedBox(height: short ? 8 : 14),
+                Text(
+                  ticket.oneLiner.isEmpty ? '한 줄 평을 남겨보세요' : ticket.oneLiner,
+                  maxLines: short ? 2 : 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.display(
+                    size: short ? 16 : 19,
+                    color: ticket.oneLiner.isEmpty
+                        ? AppColors.pulp
+                        : AppColors.oxblood,
+                    height: 1.3,
+                  ),
+                ),
+                SizedBox(height: short ? 8 : 12),
+                const Divider(color: AppColors.pulp),
+                SizedBox(height: short ? 6 : 10),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      ticket.note.isEmpty ? '아직 감상문이 없습니다.' : ticket.note,
+                      style: AppText.ui(
+                        size: 13,
+                        color: ticket.note.isEmpty
+                            ? AppColors.pulp
+                            : AppColors.inkSoft,
+                        height: 1.7,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: short ? 6 : 8),
+                Row(
+                  children: [
+                    Text('WITH',
+                        style: AppText.eyebrow(
+                            color: AppColors.inkSoft.withValues(alpha: .6))),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        ticket.companion.isEmpty ? '—' : ticket.companion,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppText.data(
-                            size: 9, spacing: 0.6, color: AppColors.inkSoft)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _Stars(rating: ticket.rating),
-              const SizedBox(height: 16),
-              Text(
-                ticket.oneLiner.isEmpty ? '한 줄 평을 남겨보세요' : ticket.oneLiner,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.display(
-                  size: 19,
-                  color:
-                  ticket.oneLiner.isEmpty ? AppColors.pulp : AppColors.oxblood,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Divider(color: AppColors.pulp),
-              const SizedBox(height: 12),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Text(
-                    ticket.note.isEmpty ? '아직 감상문이 없습니다.' : ticket.note,
-                    style: AppText.ui(
-                      size: 13,
-                      color:
-                      ticket.note.isEmpty ? AppColors.pulp : AppColors.inkSoft,
-                      height: 1.75,
+                            size: 10, spacing: 0.6, color: AppColors.ink),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text('WITH',
-                      style: AppText.eyebrow(
-                          color: AppColors.inkSoft.withValues(alpha: .6))),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      ticket.companion.isEmpty ? '—' : ticket.companion,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.data(
-                          size: 10, spacing: 0.6, color: AppColors.ink),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

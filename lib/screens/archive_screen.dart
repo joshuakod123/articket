@@ -5,10 +5,11 @@ import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/index_tab.dart';
+import '../widgets/paper.dart';
 import 'folder_screen.dart';
 import 'market_screen.dart';
 
-/// 앱의 첫 화면. 서류철이 세로로 철해진 파일 드로어.
+/// 앱의 첫 화면. 미색 벽 앞에 서류철이 세로로 철해진 파일 드로어.
 class ArchiveScreen extends StatefulWidget {
   const ArchiveScreen({super.key});
 
@@ -26,50 +27,57 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: ListenableBuilder(
-          listenable: store,
-          builder: (context, _) {
-            final folders = store.folders;
-            final stackHeight = (folders.length - 1) * _gap + _folderHeight;
+      body: Stack(
+        children: [
+          SafeArea(
+            child: ListenableBuilder(
+              listenable: store,
+              builder: (context, _) {
+                final folders = store.folders;
+                final stackHeight = (folders.length - 1) * _gap + _folderHeight;
 
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(child: _Header(total: store.tickets.length)),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-                    child: SizedBox(
-                      height: stackHeight,
-                      child: Stack(
-                        children: [
-                          for (var i = 0; i < folders.length; i++)
-                            AnimatedPositioned(
-                              duration: const Duration(milliseconds: 260),
-                              curve: Curves.easeOutCubic,
-                              top: i * _gap,
-                              left: 0,
-                              right: 0,
-                              height: _folderHeight,
-                              child: FolderCard(
-                                folder: folders[i],
-                                count: store.countIn(folders[i].id),
-                                tabSlot: i % 3,
-                                totalSlots: 3,
-                                lifted: _lifted == i,
-                                preview: _previewColors(folders[i].id),
-                                onTap: () => _open(folders[i], i),
-                              ),
-                            ),
-                        ],
+                return CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                        child: _Header(total: store.tickets.length)),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+                        child: SizedBox(
+                          height: stackHeight,
+                          child: Stack(
+                            children: [
+                              for (var i = 0; i < folders.length; i++)
+                                AnimatedPositioned(
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutCubic,
+                                  top: i * _gap,
+                                  left: 0,
+                                  right: 0,
+                                  height: _folderHeight,
+                                  child: FolderCard(
+                                    folder: folders[i],
+                                    count: store.countIn(folders[i].id),
+                                    tabSlot: i % 3,
+                                    totalSlots: 3,
+                                    lifted: _lifted == i,
+                                    preview: _previewColors(folders[i].id),
+                                    onTap: () => _open(folders[i], i),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+                  ],
+                );
+              },
+            ),
+          ),
+          // 플라스터 벽 질감.
+          const WallGrain(),
+        ],
       ),
       bottomNavigationBar: const _BottomBar(),
     );
@@ -107,17 +115,20 @@ class _Header extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('ARTICKET', style: AppText.eyebrow(color: AppColors.foil)),
+              Text('ARTICKET', style: AppText.eyebrow(color: AppColors.oxblood)),
               Text('$total FILED',
                   style: AppText.data(size: 10, color: AppColors.inkSoft)),
             ],
           ),
           const SizedBox(height: 18),
           Text('나의\n티켓북',
-              style: AppText.display(size: 40, color: AppColors.stock)),
+              style: AppText.display(size: 42, color: AppColors.ink)),
+          const SizedBox(height: 16),
+          // 미술관 캡션 플레이트처럼: 헤어라인 + 작은 안내.
+          Container(height: 1, color: AppColors.line),
           const SizedBox(height: 10),
           Text('탭을 눌러 서류철을 엽니다',
-              style: AppText.ui(size: 13, color: AppColors.inkSoft)),
+              style: AppText.ui(size: 12, color: AppColors.inkSoft)),
         ],
       ),
     );
@@ -131,7 +142,8 @@ class _BottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.inkSoft)),
+        color: AppColors.stockLight,
+        border: Border(top: BorderSide(color: AppColors.line)),
       ),
       child: SafeArea(
         top: false,
@@ -160,20 +172,20 @@ class _BottomBar extends StatelessWidget {
 
   Widget _item(BuildContext context, IconData icon, String label, bool active,
       VoidCallback? onTap) {
+    final color = active ? AppColors.oxblood : AppColors.inkSoft;
     return Expanded(
       child: InkWell(
         onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon,
-                size: 20,
-                color: active ? AppColors.foil : AppColors.inkSoft),
+            Icon(icon, size: 20, color: color),
             const SizedBox(height: 4),
             Text(label,
                 style: AppText.ui(
                     size: 10,
-                    color: active ? AppColors.stock : AppColors.inkSoft)),
+                    weight: active ? FontWeight.w600 : FontWeight.w400,
+                    color: color)),
           ],
         ),
       ),

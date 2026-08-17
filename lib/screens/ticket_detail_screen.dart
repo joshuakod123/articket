@@ -9,6 +9,7 @@ import '../models/layer.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../widgets/paper.dart';
 import '../widgets/ticket_card.dart';
 import 'editor_screen.dart';
 import 'ticket_style_sheet.dart';
@@ -100,7 +101,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 onPressed: () => showModalBottomSheet<void>(
                   context: context,
                   isScrollControlled: true,
-                  backgroundColor: AppColors.ink,
+                  backgroundColor: AppColors.stockLight,
                   builder: (_) =>
                       TicketStyleSheet(ticket: ticket, store: store),
                 ),
@@ -169,6 +170,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 ),
               ),
 
+              const WallGrain(seed: 9),
+
               // ── 안내 & 액션 ───────────────────────────
               Positioned(
                 left: 0,
@@ -194,21 +197,25 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.ink,
+        backgroundColor: AppColors.stockLight,
+        shape: const RoundedRectangleBorder(),
         title: Text('티켓을 버릴까요?',
-            style: AppText.ui(size: 16, color: AppColors.stock)),
+            style: AppText.ui(size: 16, color: AppColors.ink)),
         content: Text('${ticket.serial}은(는) 복구할 수 없습니다.',
             style: AppText.ui(size: 13, color: AppColors.inkSoft)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text('그대로 두기',
-                style: AppText.ui(size: 13, color: AppColors.stock)),
+                style: AppText.ui(size: 13, color: AppColors.ink)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text('버리기',
-                style: AppText.ui(size: 13, color: AppColors.oxblood)),
+                style: AppText.ui(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: AppColors.oxblood)),
           ),
         ],
       ),
@@ -249,15 +256,7 @@ class _FlipCard extends StatelessWidget {
       alignment: Alignment.center,
       transform: matrix,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.55),
-              blurRadius: 34,
-              offset: const Offset(0, 16),
-            ),
-          ],
-        ),
+        decoration: BoxDecoration(boxShadow: paperShadow(depth: 1.4)),
         // 뒷면은 한 번 더 뒤집어야 글씨가 정방향으로 보입니다.
         child: isBack
             ? Transform(
@@ -330,7 +329,10 @@ Widget buildLayerContent(ScrapLayer layer) {
     // 폴라로이드 프레임. 실제 이미지가 없으면 색 블록으로 대체합니다.
       return Container(
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 18),
-        color: AppColors.stockLight,
+        decoration: BoxDecoration(
+          color: AppColors.stockLight,
+          boxShadow: paperShadow(depth: 0.4),
+        ),
         child: Container(
           width: 84,
           height: 84,
@@ -354,7 +356,7 @@ class _ActionBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppColors.ink.withValues(alpha: 0), AppColors.ink],
+          colors: [AppColors.bg.withValues(alpha: 0), AppColors.bg],
         ),
       ),
       child: SafeArea(
@@ -368,8 +370,8 @@ class _ActionBar extends StatelessWidget {
             FilledButton.icon(
               onPressed: onDecorate,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.stock,
-                foregroundColor: AppColors.ink,
+                backgroundColor: AppColors.ink,
+                foregroundColor: AppColors.stockLight,
                 shape: const RoundedRectangleBorder(),
                 padding:
                 const EdgeInsets.symmetric(horizontal: 18, vertical: 14),

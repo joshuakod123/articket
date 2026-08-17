@@ -55,7 +55,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     style: AppText.ui(
                         size: 14,
                         weight: FontWeight.w600,
-                        color: AppColors.foil)),
+                        color: AppColors.oxblood)),
               ),
               const SizedBox(width: 8),
             ],
@@ -164,7 +164,7 @@ class _EditorScreenState extends State<EditorScreen> {
     ];
     final picked = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppColors.ink,
+      backgroundColor: AppColors.stockLight,
       builder: (context) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -172,7 +172,7 @@ class _EditorScreenState extends State<EditorScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('STICKER', style: AppText.eyebrow(color: AppColors.foil)),
+              Text('STICKER', style: AppText.eyebrow(color: AppColors.oxblood)),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 12,
@@ -186,7 +186,8 @@ class _EditorScreenState extends State<EditorScreen> {
                         height: 52,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.inkSoft),
+                          color: AppColors.stock,
+                          border: Border.all(color: AppColors.line),
                         ),
                         child: Text(g, style: const TextStyle(fontSize: 24)),
                       ),
@@ -223,7 +224,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _addTape() {
-    const colors = [0xCC3F4A3C, 0xCC6E1F1B, 0xCCB08B3E, 0xCC2E3B4E];
+    const colors = [0xCC3F4A3C, 0xCC6B1F1A, 0xCC9C7C34, 0xCC2E3B4E];
     final c = colors[_ticket.layers.length % colors.length];
     _place(ScrapLayer(
       id: _uuid.v4(),
@@ -264,19 +265,23 @@ class _EditorScreenState extends State<EditorScreen> {
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.ink,
+        backgroundColor: AppColors.stockLight,
+        shape: const RoundedRectangleBorder(),
         title: Text('글자 넣기',
-            style: AppText.ui(size: 15, color: AppColors.stock)),
+            style: AppText.ui(size: 15, color: AppColors.ink)),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLines: 3,
-          style: AppText.ui(size: 14, color: AppColors.stock),
+          style: AppText.ui(size: 14, color: AppColors.ink),
           decoration: InputDecoration(
             hintText: '한 줄이든 여러 줄이든',
             hintStyle: AppText.ui(size: 14, color: AppColors.inkSoft),
             enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.inkSoft),
+              borderSide: BorderSide(color: AppColors.line),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.foil),
             ),
           ),
         ),
@@ -289,7 +294,7 @@ class _EditorScreenState extends State<EditorScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: Text('넣기',
-                style: AppText.ui(size: 13, color: AppColors.foil)),
+                style: AppText.ui(size: 13, color: AppColors.oxblood)),
           ),
         ],
       ),
@@ -303,7 +308,7 @@ class _EditorScreenState extends State<EditorScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.ink,
+      backgroundColor: AppColors.stockLight,
       builder: (context) => TicketStyleSheet(
         ticket: _ticket,
         store: store,
@@ -316,7 +321,7 @@ class _EditorScreenState extends State<EditorScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.ink,
+      backgroundColor: AppColors.stockLight,
       builder: (context) => _InfoSheet(ticket: _ticket, store: store),
     );
   }
@@ -433,7 +438,8 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.inkSoft)),
+        color: AppColors.stockLight,
+        border: Border(top: BorderSide(color: AppColors.line)),
       ),
       child: SafeArea(
         top: false,
@@ -467,7 +473,7 @@ class _Toolbar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 21, color: AppColors.stock),
+          Icon(icon, size: 21, color: AppColors.ink),
           const SizedBox(height: 5),
           Text(label,
               style: AppText.ui(size: 10, color: AppColors.inkSoft)),
@@ -540,7 +546,7 @@ class _InfoSheetState extends State<_InfoSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('RECORD', style: AppText.eyebrow(color: AppColors.foil)),
+            Text('RECORD', style: AppText.eyebrow(color: AppColors.oxblood)),
             const SizedBox(height: 18),
             _field('전시명', _title, lines: 2),
             _field('장소', _venue),
@@ -559,7 +565,7 @@ class _InfoSheetState extends State<_InfoSheet> {
                     i < _rating
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
-                    color: i < _rating ? AppColors.foil : AppColors.inkSoft,
+                    color: i < _rating ? AppColors.foil : AppColors.line,
                   ),
                 ),
               ),
@@ -594,12 +600,12 @@ class _InfoSheetState extends State<_InfoSheet> {
         child: TextField(
           controller: c,
           maxLines: lines,
-          style: AppText.ui(size: 14, color: AppColors.stock),
+          style: AppText.ui(size: 14, color: AppColors.ink),
           decoration: InputDecoration(
             labelText: label,
             labelStyle: AppText.ui(size: 12, color: AppColors.inkSoft),
             enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.inkSoft),
+              borderSide: BorderSide(color: AppColors.line),
             ),
             focusedBorder: const UnderlineInputBorder(
               borderSide: BorderSide(color: AppColors.foil),

@@ -8,36 +8,41 @@ class AppTheme {
   AppTheme._();
 
   static ThemeData build() {
-    final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
+    final base = ThemeData(brightness: Brightness.light, useMaterial3: true);
 
     return base.copyWith(
-      scaffoldBackgroundColor: AppColors.ink,
-      colorScheme: const ColorScheme.dark(
+      scaffoldBackgroundColor: AppColors.bg,
+      colorScheme: const ColorScheme.light(
         primary: AppColors.oxblood,
         secondary: AppColors.foil,
-        surface: AppColors.ink,
-        onSurface: AppColors.stock,
+        surface: AppColors.bg,
+        onSurface: AppColors.ink,
       ),
       textTheme: base.textTheme.apply(
-        bodyColor: AppColors.stock,
-        displayColor: AppColors.stock,
+        bodyColor: AppColors.ink,
+        displayColor: AppColors.ink,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        iconTheme: const IconThemeData(color: AppColors.stock, size: 20),
-        titleTextStyle: AppText.eyebrow(color: AppColors.stock),
-        systemOverlayStyle: SystemUiOverlayStyle.light,
+        iconTheme: const IconThemeData(color: AppColors.ink, size: 20),
+        titleTextStyle: AppText.eyebrow(color: AppColors.inkSoft),
+        systemOverlayStyle: SystemUiOverlayStyle.dark, // 밝은 배경 → 어두운 상태바
       ),
       splashFactory: InkSparkle.splashFactory,
       dividerTheme: const DividerThemeData(
-        color: AppColors.inkSoft,
+        color: AppColors.line,
         thickness: 1,
         space: 1,
       ),
-      // 접근성: 모션 축소 설정을 존중하기 위한 기본 페이지 전환.
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.ink,
+        contentTextStyle: AppText.ui(size: 13, color: AppColors.stockLight),
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(),
+      ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),

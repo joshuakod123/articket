@@ -84,15 +84,15 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
             width: 36,
             height: 3,
             decoration: BoxDecoration(
-              color: AppColors.inkSoft,
+              color: AppColors.line,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           TabBar(
             controller: _tabs,
-            indicatorColor: AppColors.foil,
+            indicatorColor: AppColors.oxblood,
             indicatorSize: TabBarIndicatorSize.label,
-            labelColor: AppColors.stock,
+            labelColor: AppColors.ink,
             unselectedLabelColor: AppColors.inkSoft,
             labelStyle: AppText.eyebrow(),
             tabs: const [Tab(text: 'FRAME'), Tab(text: 'POSTER')],
@@ -120,7 +120,8 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
         crossAxisCount: 3,
         mainAxisSpacing: 18,
         crossAxisSpacing: 14,
-        childAspectRatio: 0.62,
+        // 셀을 살짝 키워 라벨 두 줄이 들어갈 여유를 둡니다. (overflow 방지)
+        childAspectRatio: 0.58,
       ),
       itemCount: TicketFrame.values.length,
       itemBuilder: (context, i) {
@@ -136,8 +137,9 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
+                    color: AppColors.stock,
                     border: Border.all(
-                      color: selected ? AppColors.foil : AppColors.inkSoft,
+                      color: selected ? AppColors.oxblood : AppColors.line,
                       width: selected ? 1.5 : 1,
                     ),
                   ),
@@ -159,10 +161,10 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
                   style: AppText.ui(
                     size: 12,
                     weight: FontWeight.w600,
-                    color: selected ? AppColors.foil : AppColors.stock,
+                    color: selected ? AppColors.oxblood : AppColors.ink,
                   )),
               Text(frame.hint,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppText.ui(size: 9, color: AppColors.inkSoft)),
             ],
@@ -178,7 +180,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
       controller: controller,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
       children: [
-        Text('사진 넣기', style: AppText.eyebrow(color: AppColors.foil)),
+        Text('사진 넣기', style: AppText.eyebrow(color: AppColors.oxblood)),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -211,7 +213,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
         const SizedBox(height: 26),
         Row(
           children: [
-            Text('색으로 채우기', style: AppText.eyebrow(color: AppColors.foil)),
+            Text('색으로 채우기', style: AppText.eyebrow(color: AppColors.oxblood)),
             const SizedBox(width: 8),
             if (t.hasPhoto)
               Text('· 사진을 빼면 적용됩니다',
@@ -230,10 +232,11 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
         const SizedBox(height: 28),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
+          activeTrackColor: AppColors.foil,
           value: t.holographic,
           onChanged: (v) => _apply(() => t.holographic = v),
           title: Text('홀로그램 텍스처',
-              style: AppText.ui(size: 14, color: AppColors.stock)),
+              style: AppText.ui(size: 14, color: AppColors.ink)),
           subtitle: Text('기기를 기울이면 펄이 흐릅니다',
               style: AppText.ui(size: 11, color: AppColors.inkSoft)),
         ),
@@ -254,7 +257,10 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(border: Border.all(color: AppColors.inkSoft)),
+        decoration: BoxDecoration(
+          color: AppColors.stock,
+          border: Border.all(color: AppColors.line),
+        ),
         child: Column(
           children: [
             if (_picking)
@@ -265,9 +271,9 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
                     strokeWidth: 2, color: AppColors.foil),
               )
             else
-              Icon(icon, size: 20, color: AppColors.stock),
+              Icon(icon, size: 20, color: AppColors.ink),
             const SizedBox(height: 8),
-            Text(label, style: AppText.ui(size: 12, color: AppColors.stock)),
+            Text(label, style: AppText.ui(size: 12, color: AppColors.ink)),
           ],
         ),
       ),
@@ -294,7 +300,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
                   colors: palette.colors,
                 ),
                 border: Border.all(
-                  color: selected ? AppColors.foil : Colors.transparent,
+                  color: selected ? AppColors.oxblood : Colors.transparent,
                   width: 2,
                 ),
               ),

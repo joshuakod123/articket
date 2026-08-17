@@ -30,6 +30,26 @@ class GrainPainter extends CustomPainter {
   bool shouldRepaint(GrainPainter old) => false;
 }
 
+/// 화면 전체에 얹는 플라스터 벽 질감. 콘텐츠 위에 아주 옅게 깝니다.
+class WallGrain extends StatelessWidget {
+  const WallGrain({super.key, this.opacity = 0.028, this.seed = 3});
+
+  final double opacity;
+  final int seed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: RepaintBoundary(
+          child: CustomPaint(
+              painter: GrainPainter(opacity: opacity, seed: seed)),
+        ),
+      ),
+    );
+  }
+}
+
 /// 티켓/카드 표면에 종이 질감을 얹는 래퍼.
 class PaperSurface extends StatelessWidget {
   const PaperSurface({
@@ -94,14 +114,15 @@ class HoloOverlay extends StatelessWidget {
 }
 
 /// 카드 아래 깔리는 종이 두께 그림자.
+/// 라이트 배경에서는 세피아 톤을 낮은 알파로 깔아야 종이가 벽에서 떠 보입니다.
 List<BoxShadow> paperShadow({double depth = 1}) => [
   BoxShadow(
-    color: Colors.black.withValues(alpha: 0.45 * depth),
-    blurRadius: 18 * depth,
-    offset: Offset(0, 8 * depth),
+    color: const Color(0xFF3B2F1E).withValues(alpha: 0.18 * depth),
+    blurRadius: 22 * depth,
+    offset: Offset(0, 10 * depth),
   ),
   BoxShadow(
-    color: Colors.black.withValues(alpha: 0.25),
+    color: const Color(0xFF3B2F1E).withValues(alpha: 0.12),
     blurRadius: 2,
     offset: const Offset(0, 1),
   ),
