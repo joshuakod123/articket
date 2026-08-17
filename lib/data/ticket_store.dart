@@ -38,6 +38,27 @@ class TicketStore extends ChangeNotifier {
     return null;
   }
 
+  // ── 서류철 관리 ─────────────────────────────────
+
+  void addFolder(ArchiveFolder folder) {
+    _folders.add(folder);
+    notifyListeners();
+  }
+
+  /// 서류철을 버립니다. 안에 철해둔 티켓도 함께 사라집니다.
+  void removeFolder(String id) {
+    _folders.removeWhere((f) => f.id == id);
+    _tickets.removeWhere((t) => t.folderId == id);
+    notifyListeners();
+  }
+
+  ArchiveFolder? folderById(String id) {
+    for (final f in _folders) {
+      if (f.id == id) return f;
+    }
+    return null;
+  }
+
   void add(Ticket ticket) {
     _tickets.add(ticket);
     notifyListeners();

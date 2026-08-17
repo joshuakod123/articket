@@ -129,7 +129,11 @@ class ArchiveFolder {
   });
 
   final String id;
-  final String label;
-  final String subtitle;
-  final Color color;
+
+  /// 인덱스 탭에 찍히는 영문 라벨. 편집 시트에서 바꿀 수 있습니다.
+  String label;
+
+  /// 서류철 이름(한글).
+  String subtitle;
+  Color color;
 }
