@@ -54,6 +54,22 @@ class AppText {
         letterSpacing: spacing,
       );
 
+  /// 손글씨. 스크랩북 페이지에 직접 적어 넣은 메모·한 줄 평.
+  ///
+  /// 나눔펜스크립트는 한글 글리프를 갖고 있어서 영문/한글이 같은 손글씨로 붙습니다.
+  static TextStyle hand({
+    double size = 20,
+    Color? color,
+    double height = 1.3,
+    FontWeight weight = FontWeight.w400,
+  }) =>
+      GoogleFonts.nanumPenScript(
+        fontSize: size,
+        fontWeight: weight,
+        color: color,
+        height: height,
+      );
+
   /// 섹션 위에 얹는 작은 대문자 라벨. ("EYEBROW")
   static TextStyle eyebrow({Color? color}) => GoogleFonts.spaceMono(
     fontSize: 10,

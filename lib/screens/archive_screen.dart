@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/ticket_store.dart';
@@ -9,7 +11,10 @@ import '../widgets/paper.dart';
 import 'folder_screen.dart';
 import 'market_screen.dart';
 
-/// 앱의 첫 화면. 미색 벽 앞에 서류철이 세로로 철해진 파일 드로어.
+/// 앱의 첫 화면.
+///
+/// 서류철을 눕혀 쌓는 대신, 실제 파일 캐비닛처럼 **세워 꽂아** 옆으로 넘깁니다.
+/// 맨 앞에 아카이브 표지가 서 있고 그 뒤로 폴더들이 겹쳐 꽂힙니다.
 class ArchiveScreen extends StatefulWidget {
   const ArchiveScreen({super.key});
 
@@ -21,55 +26,23 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   final store = TicketStore.instance;
   int? _lifted;
 
-  static const _folderHeight = 156.0;
-  static const _gap = 104.0;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
           SafeArea(
+            bottom: false,
             child: ListenableBuilder(
               listenable: store,
               builder: (context, _) {
                 final folders = store.folders;
-                final stackHeight = (folders.length - 1) * _gap + _folderHeight;
 
-                return CustomScrollView(
-                  slivers: [
-                    SliverToBoxAdapter(
-                        child: _Header(total: store.tickets.length)),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-                        child: SizedBox(
-                          height: stackHeight,
-                          child: Stack(
-                            children: [
-                              for (var i = 0; i < folders.length; i++)
-                                AnimatedPositioned(
-                                  duration: const Duration(milliseconds: 260),
-                                  curve: Curves.easeOutCubic,
-                                  top: i * _gap,
-                                  left: 0,
-                                  right: 0,
-                                  height: _folderHeight,
-                                  child: FolderCard(
-                                    folder: folders[i],
-                                    count: store.countIn(folders[i].id),
-                                    tabSlot: i % 3,
-                                    totalSlots: 3,
-                                    lifted: _lifted == i,
-                                    preview: _previewColors(folders[i].id),
-                                    onTap: () => _open(folders[i], i),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Header(total: store.tickets.length),
+                    Expanded(child: _drawer(folders)),
                   ],
                 );
               },
@@ -83,15 +56,98 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
     );
   }
 
-  List<Color> _previewColors(String folderId) => store
-      .ticketsIn(folderId)
-      .take(3)
-      .map((t) => t.posterTint.first)
-      .toList();
+  Widget _drawer(List<ArchiveFolder> folders) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final width = math.max(
+          SpineMetrics.drawerWidth(folders.length),
+          c.maxWidth,
+        );
+
+        return Stack(
+          children: [
+            // 서랍 안쪽의 그늘.
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: 26,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppColors.bgDeep,
+                        AppColors.bgDeep.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: SizedBox(
+                width: width,
+                height: c.maxHeight,
+                child: Stack(
+                  children: [
+                    // 오른쪽 서류철부터 그려서 왼쪽 것이 앞에 오게 합니다.
+                    for (var i = folders.length - 1; i >= 0; i--)
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        left: SpineMetrics.xOf(i),
+                        width: SpineMetrics.width,
+                        top: 14 +
+                            SpineMetrics.stagger(i) -
+                            (_lifted == i ? 12 : 0),
+                        bottom: 0,
+                        child: FolderSpine(
+                          folder: folders[i],
+                          count: store.countIn(folders[i].id),
+                          lifted: _lifted == i,
+                          fileNo: i + 1,
+                          photo: _photoOf(folders[i].id),
+                          onTap: () => _open(folders[i], i),
+                        ),
+                      ),
+
+                    // 표지는 맨 앞.
+                    Positioned(
+                      left: SpineMetrics.leftPad,
+                      width: SpineMetrics.coverWidth,
+                      top: 6,
+                      bottom: 0,
+                      child: ArchiveCover(
+                        total: store.tickets.length,
+                        folders: folders.length,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 서류철 사진 창에 쓸 색. 가장 최근 티켓의 포스터에서 가져옵니다.
+  List<Color> _photoOf(String folderId) {
+    final tickets = store.ticketsIn(folderId);
+    if (tickets.isEmpty) return const [];
+    return tickets.first.posterTint;
+  }
 
   Future<void> _open(ArchiveFolder folder, int index) async {
     setState(() => _lifted = index);
-    await Future<void>.delayed(const Duration(milliseconds: 160));
+    await Future<void>.delayed(const Duration(milliseconds: 170));
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => FolderScreen(folder: folder)),
@@ -107,7 +163,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -120,14 +176,14 @@ class _Header extends StatelessWidget {
                   style: AppText.data(size: 10, color: AppColors.inkSoft)),
             ],
           ),
-          const SizedBox(height: 18),
-          Text('나의\n티켓북',
-              style: AppText.display(size: 42, color: AppColors.ink)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Text('나의 티켓북',
+              style: AppText.display(size: 34, color: AppColors.ink)),
+          const SizedBox(height: 12),
           // 미술관 캡션 플레이트처럼: 헤어라인 + 작은 안내.
           Container(height: 1, color: AppColors.line),
-          const SizedBox(height: 10),
-          Text('탭을 눌러 서류철을 엽니다',
+          const SizedBox(height: 8),
+          Text('옆으로 밀어 넘기고, 탭을 눌러 펼칩니다',
               style: AppText.ui(size: 12, color: AppColors.inkSoft)),
         ],
       ),
