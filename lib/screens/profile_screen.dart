@@ -149,7 +149,10 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-/// 숫자 넷을 큼직하게 찍은 대장.
+/// 관람 회원증.
+///
+/// 그냥 숫자를 나열하면 대시보드가 됩니다. 여기서는 **발급받은 회원증 한 장**으로
+/// 만들었습니다. 왼쪽에 절취선, 오른쪽 위에 고무 도장, 아래에 항목 셋.
 class _Ledger extends StatelessWidget {
   const _Ledger({
     required this.tickets,
@@ -166,53 +169,129 @@ class _Ledger extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.6)),
+      decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.7)),
       child: PaperSurface(
         color: AppColors.stockLight,
         grain: 0.06,
+        fiber: 0.8,
         seed: 5,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 왼쪽 절취 조각. 회원증 번호가 세로로 찍혀 있습니다.
+            SizedBox(
+              width: 34,
+              child: Stack(
                 children: [
-                  Text('LEDGER',
-                      style: AppText.eyebrow(color: AppColors.oxblood)),
-                  const Spacer(),
-                  Text(
-                    '${DateTime.now().year}',
-                    style: AppText.data(
-                        size: 9, spacing: 1.6, color: AppColors.pulp),
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: AppColors.oxblood.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  Center(
+                    child: RotatedBox(
+                      quarterTurns: 3,
+                      child: Text(
+                        'MEMBER',
+                        style: AppText.data(
+                            size: 9,
+                            spacing: 3.0,
+                            weight: FontWeight.w700,
+                            color: AppColors.oxblood.withValues(alpha: 0.7)),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: CustomPaint(
+                      size: const Size(1, double.infinity),
+                      painter: _DashPainter(),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              DebossedText(
-                '지금까지 $tickets장',
-                depth: 0.35,
-                style: AppText.display(size: 26, color: AppColors.ink),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('LEDGER',
+                            style: AppText.eyebrow(color: AppColors.inkSoft)),
+                        const Spacer(),
+                        Transform.rotate(
+                          angle: -0.06,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                  color: AppColors.oxblood
+                                      .withValues(alpha: 0.65),
+                                  width: 1.2),
+                            ),
+                            child: Text('${DateTime.now().year}',
+                                style: AppText.data(
+                                    size: 9,
+                                    spacing: 2.0,
+                                    weight: FontWeight.w700,
+                                    color: AppColors.oxblood
+                                        .withValues(alpha: 0.85))),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    DebossedText(
+                      '지금까지 $tickets장',
+                      depth: 0.35,
+                      style: AppText.display(size: 25, color: AppColors.ink),
+                    ),
+                    const SizedBox(height: 14),
+                    Container(height: 1, color: AppColors.line),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        _Cell(label: '서류철', value: '$folders'),
+                        _Cell(label: '올해', value: '$thisYear'),
+                        _Cell(
+                          label: '평균 별점',
+                          value:
+                          average == 0 ? '—' : average.toStringAsFixed(1),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-              Container(height: 1, color: AppColors.line),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _Cell(label: '서류철', value: '$folders'),
-                  _Cell(label: '올해', value: '$thisYear'),
-                  _Cell(
-                    label: '평균 별점',
-                    value: average == 0 ? '—' : average.toStringAsFixed(1),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+/// 회원증의 세로 절취선.
+class _DashPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = AppColors.pulp
+      ..strokeWidth = 1.1
+      ..strokeCap = StrokeCap.round;
+    for (double y = 8; y < size.height - 8; y += 8) {
+      canvas.drawLine(Offset(0, y), Offset(0, y + 3.5), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashPainter old) => false;
 }
 
 class _Cell extends StatelessWidget {
@@ -232,7 +311,7 @@ class _Cell extends StatelessWidget {
                   color: AppColors.inkSoft.withValues(alpha: 0.7))),
           const SizedBox(height: 6),
           Text(value,
-              style: AppText.plate(size: 26, color: AppColors.foil)),
+              style: AppText.plate(size: 24, color: AppColors.foil)),
         ],
       ),
     );

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,17 +14,22 @@ import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scrap_layers.dart';
+import '../widgets/scrap_page.dart';
 import '../widgets/scrapbook.dart';
+import '../widgets/ticket_canvas.dart';
 import 'scrap_sheets.dart';
 
-/// 스크랩북 **페이지 자체**를 꾸미는 화면.
+/// 스크랩북 페이지를 손으로 꾸미는 화면.
 ///
-/// 지금까지 꾸미기는 티켓 한 장 위에서만 가능했습니다. 그런데 실제 스크랩북에서
-/// 재미있는 건 티켓 사이의 여백입니다 — 표를 붙이고 남은 자리에 스티커를 붙이고,
-/// 옆에 뭔가 적고, 사진을 끼우는 그 여백이요.
+/// 예전에는 **빈 종이 한 장만** 띄워놓고 스티커를 붙이라고 했습니다.
+/// 정작 그 페이지에 이미 붙어 있는 티켓이 어디 있는지 안 보이니,
+/// 눈 감고 붙이는 것과 다르지 않았습니다. 이번에 세 가지를 고쳤습니다.
 ///
-/// 여기서 붙인 것은 `ArchiveFolder.pageLayers`에 서류철 단위로 저장되어,
-/// 폴더를 열 때마다 티켓 **뒤에 깔린 배경**으로 함께 펼쳐집니다.
+/// 1. **티켓이 그대로 보입니다.** 스크랩북과 똑같은 위젯([AutoScrapPage],
+///    [TapedTicket])을 써서, 여기서 본 그림이 완성된 페이지와 일치합니다.
+/// 2. **티켓 자리를 옮길 수 있습니다.** 티켓을 끌면 자동 배치가 풀리고
+///    핀터레스트처럼 자유롭게 앉힐 수 있습니다. 두 손가락으로 돌리고 키웁니다.
+/// 3. 종이는 [NotebookPage] 그대로라, 결·얼룩·제본·뜯긴 가장자리가 다 살아 있습니다.
 class PageDecorScreen extends StatefulWidget {
   const PageDecorScreen({super.key, required this.folderId});
 
@@ -37,7 +44,9 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
   final _uuid = const Uuid();
   final _picker = ImagePicker();
 
-  String? _selectedId;
+  /// 지금 고른 것. 레이어면 layer:<id>, 티켓이면 ticket:<id>.
+  String? _selected;
+
   double _startScale = 1;
   double _startRotation = 0;
 
@@ -48,26 +57,50 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
 
   List<ScrapLayer> get _layers => _folder?.pageLayers ?? [];
 
+  List<Ticket> get _tickets => store.ticketsIn(widget.folderId);
+
   // ── 되돌리기 ─────────────────────────────────────
+  //
+  // 레이어뿐 아니라 **티켓 자리**도 함께 되감아야 합니다.
+  // 둘을 한 문자열에 담아 한 번에 스냅샷합니다.
+
+  String _stateString() {
+    final places = <String, List<double?>>{
+      for (final t in _tickets) t.id: [t.px, t.py, t.pscale, t.protation],
+    };
+    return '${ScrapLayer.encodeList(_layers)}\u0000${jsonEncode(places)}';
+  }
 
   void _snapshot() {
-    _undo.add(ScrapLayer.encodeList(_layers));
+    _undo.add(_stateString());
     if (_undo.length > 40) _undo.removeAt(0);
     _redo.clear();
   }
 
   void _restore(String raw) {
+    final parts = raw.split('\u0000');
     _layers
       ..clear()
-      ..addAll(ScrapLayer.decodeList(raw));
-    if (!_layers.any((l) => l.id == _selectedId)) _selectedId = null;
+      ..addAll(ScrapLayer.decodeList(parts[0]));
+
+    final places = jsonDecode(parts[1]) as Map<String, dynamic>;
+    for (final t in _tickets) {
+      final v = places[t.id] as List<dynamic>?;
+      if (v == null) continue;
+      t
+        ..px = (v[0] as num?)?.toDouble()
+        ..py = (v[1] as num?)?.toDouble()
+        ..pscale = (v[2] as num?)?.toDouble() ?? 1.0
+        ..protation = (v[3] as num?)?.toDouble() ?? 0.0;
+    }
+    _selected = null;
     store.touch();
   }
 
   void _undoOnce() {
     if (_undo.isEmpty) return;
     HapticFeedback.selectionClick();
-    _redo.add(ScrapLayer.encodeList(_layers));
+    _redo.add(_stateString());
     _restore(_undo.removeLast());
     setState(() {});
   }
@@ -75,18 +108,58 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
   void _redoOnce() {
     if (_redo.isEmpty) return;
     HapticFeedback.selectionClick();
-    _undo.add(ScrapLayer.encodeList(_layers));
+    _undo.add(_stateString());
     _restore(_redo.removeLast());
     setState(() {});
   }
 
   /// 아무것도 안 바뀐 제스처는 히스토리에서 도로 뺍니다.
   void _endGesture() {
-    if (_undo.isNotEmpty && _undo.last == ScrapLayer.encodeList(_layers)) {
-      _undo.removeLast();
-    }
+    if (_undo.isNotEmpty && _undo.last == _stateString()) _undo.removeLast();
     store.touch();
     setState(() {});
+  }
+
+  // ── 배치 ────────────────────────────────────────
+
+  /// 자유 배치로 넘어갑니다. 지금 자동 배치로 보이던 자리를 그대로 물려받습니다.
+  void _goFree({bool silent = false}) {
+    final folder = _folder;
+    if (folder == null || folder.freeLayout) return;
+
+    _snapshot();
+    final list = _tickets;
+    for (var i = 0; i < list.length; i++) {
+      final at = defaultTicketPlacement(i);
+      list[i]
+        ..px ??= at.dx
+        ..py ??= at.dy;
+    }
+    folder.freeLayout = true;
+    store.touch();
+    setState(() {});
+
+    if (!silent && mounted) {
+      PaperToast.show(context, '자유 배치로 바꿨습니다',
+          detail: '티켓을 끌어 옮기고, 두 손가락으로 돌리세요');
+    }
+  }
+
+  void _backToAuto() {
+    final folder = _folder;
+    if (folder == null) return;
+    _snapshot();
+    for (final t in _tickets) {
+      t
+        ..px = null
+        ..py = null
+        ..pscale = 1.0
+        ..protation = 0.0;
+    }
+    folder.freeLayout = false;
+    store.touch();
+    setState(() => _selected = null);
+    PaperToast.show(context, '자동 배치로 되돌렸습니다');
   }
 
   // ── 붙이기 ──────────────────────────────────────
@@ -96,7 +169,7 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
     _layers.add(layer);
     store.touch();
     HapticFeedback.lightImpact();
-    setState(() => _selectedId = layer.id);
+    setState(() => _selected = 'layer:${layer.id}');
   }
 
   Future<void> _addSticker() async {
@@ -171,7 +244,7 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
     _layers.removeWhere((l) => l.id == layer.id);
     store.touch();
     HapticFeedback.mediumImpact();
-    setState(() => _selectedId = null);
+    setState(() => _selected = null);
     PaperToast.show(context, '한 겹 떼어냈습니다', detail: '↩︎ 로 되돌릴 수 있습니다');
   }
 
@@ -244,11 +317,16 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
           return const Scaffold(body: Center(child: Text('삭제된 서류철입니다')));
         }
 
-        ScrapLayer? found;
+        final tickets = _tickets;
+
+        ScrapLayer? pickedLayer;
         for (final l in folder.pageLayers) {
-          if (l.id == _selectedId) found = l;
+          if (_selected == 'layer:${l.id}') pickedLayer = l;
         }
-        final selected = found;
+        Ticket? pickedTicket;
+        for (final t in tickets) {
+          if (_selected == 'ticket:${t.id}') pickedTicket = t;
+        }
 
         return Scaffold(
           appBar: AppBar(
@@ -260,16 +338,14 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
                 onPressed: _undo.isEmpty ? null : _undoOnce,
                 icon: Icon(Icons.undo,
                     size: 20,
-                    color:
-                    _undo.isEmpty ? AppColors.pulp : AppColors.ink),
+                    color: _undo.isEmpty ? AppColors.pulp : AppColors.ink),
               ),
               IconButton(
                 tooltip: '다시 하기',
                 onPressed: _redo.isEmpty ? null : _redoOnce,
                 icon: Icon(Icons.redo,
                     size: 20,
-                    color:
-                    _redo.isEmpty ? AppColors.pulp : AppColors.ink),
+                    color: _redo.isEmpty ? AppColors.pulp : AppColors.ink),
               ),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -284,39 +360,92 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
           ),
           body: Column(
             children: [
+              _LayoutBanner(
+                free: folder.freeLayout,
+                hasTickets: tickets.isNotEmpty,
+                onFree: _goFree,
+                onAuto: _backToAuto,
+              ),
               Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _selectedId = null),
+                  onTap: () => setState(() => _selected = null),
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
                     child: DecoratedBox(
                       decoration:
                       BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
-                      // 좌표 기준은 **페이지 한 장**입니다.
                       child: LayoutBuilder(
                         builder: (context, c) {
                           final canvas = Size(c.maxWidth, c.maxHeight);
                           return Stack(
+                            clipBehavior: Clip.none,
                             children: [
+                              // ── 종이 + (자동 배치일 때) 티켓 ────
                               Positioned.fill(
                                 child: NotebookPage(
                                   eyebrow: folder.subtitle,
                                   title: folder.label,
-                                  footer: 'DECORATE',
+                                  footer: folder.freeLayout
+                                      ? 'FREE LAYOUT'
+                                      : 'PAGE 01',
                                   seed: folder.id.hashCode,
-                                  child: const SizedBox.expand(),
+                                  child: folder.freeLayout
+                                      ? const SizedBox.expand()
+                                      : AutoScrapPage(
+                                    tickets: tickets.take(2).toList(),
+                                    pageIndex: 0,
+                                  ),
                                 ),
                               ),
+
+                              // ── 자유 배치 티켓 ─────────────
+                              if (folder.freeLayout)
+                                for (var i = 0; i < tickets.length; i++)
+                                  _FreeTicket(
+                                    key: ValueKey(tickets[i].id),
+                                    ticket: tickets[i],
+                                    index: i,
+                                    canvas: canvas,
+                                    selected:
+                                    _selected == 'ticket:${tickets[i].id}',
+                                    onSelect: () => setState(() =>
+                                    _selected = 'ticket:${tickets[i].id}'),
+                                    onStart: () {
+                                      _snapshot();
+                                      _startScale = tickets[i].pscale;
+                                      _startRotation = tickets[i].protation;
+                                    },
+                                    onUpdate: (d) => setState(() {
+                                      final t = tickets[i];
+                                      t.px = ((t.px ?? 0.5) +
+                                          d.focalPointDelta.dx /
+                                              canvas.width)
+                                          .clamp(0.05, 0.95);
+                                      t.py = ((t.py ?? 0.5) +
+                                          d.focalPointDelta.dy /
+                                              canvas.height)
+                                          .clamp(0.05, 0.95);
+                                      if (d.pointerCount > 1) {
+                                        t.pscale = (_startScale * d.scale)
+                                            .clamp(0.45, 2.2);
+                                        t.protation =
+                                            _startRotation + d.rotation;
+                                      }
+                                    }),
+                                    onEnd: _endGesture,
+                                  ),
+
+                              // ── 장식 레이어 ────────────────
                               for (final layer in folder.pageLayers)
                                 _Editable(
                                   key: ValueKey(layer.id),
                                   layer: layer,
                                   canvas: canvas,
-                                  selected: _selectedId == layer.id,
+                                  selected: _selected == 'layer:${layer.id}',
                                   onSelect: () {
-                                    setState(() => _selectedId = layer.id);
-                                    // 마지막에 그려지도록 맨 뒤로 옮깁니다.
+                                    setState(
+                                            () => _selected = 'layer:${layer.id}');
                                     folder.pageLayers
                                       ..removeWhere((l) => l.id == layer.id)
                                       ..add(layer);
@@ -327,27 +456,28 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
                                     _startScale = layer.scale;
                                     _startRotation = layer.rotation;
                                   },
-                                  onScaleUpdate: (d) {
-                                    setState(() {
-                                      layer.dx += d.focalPointDelta.dx /
-                                          canvas.width;
-                                      layer.dy += d.focalPointDelta.dy /
-                                          canvas.height;
-                                      layer.dx = layer.dx.clamp(0.0, 1.0);
-                                      layer.dy = layer.dy.clamp(0.0, 1.0);
-                                      if (d.pointerCount > 1) {
-                                        layer.scale =
-                                            (_startScale * d.scale)
-                                                .clamp(0.3, 4.0);
-                                        layer.rotation =
-                                            _startRotation + d.rotation;
-                                      }
-                                    });
-                                  },
+                                  onScaleUpdate: (d) => setState(() {
+                                    layer.dx =
+                                        (layer.dx + d.focalPointDelta.dx / canvas.width)
+                                            .clamp(0.0, 1.0);
+                                    layer.dy =
+                                        (layer.dy + d.focalPointDelta.dy / canvas.height)
+                                            .clamp(0.0, 1.0);
+                                    if (d.pointerCount > 1) {
+                                      layer.scale = (_startScale * d.scale)
+                                          .clamp(0.3, 4.0);
+                                      layer.rotation =
+                                          _startRotation + d.rotation;
+                                    }
+                                  }),
                                   onScaleEnd: _endGesture,
                                   onDelete: () => _remove(layer),
                                   onEdit: () => _edit(layer),
                                 ),
+
+                              if (folder.pageLayers.isEmpty &&
+                                  tickets.isEmpty)
+                                const Positioned.fill(child: _EmptyHint()),
                             ],
                           );
                         },
@@ -357,11 +487,31 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
                 ),
               ),
 
-              if (selected != null)
+              if (pickedLayer != null)
                 _SelectedBar(
-                  onEdit: () => _edit(selected),
-                  onDelete: () => _remove(selected),
-                  onDone: () => setState(() => _selectedId = null),
+                  name: switch (pickedLayer.kind) {
+                    LayerKind.sticker => '스티커',
+                    LayerKind.text => '글자',
+                    LayerKind.tape => '테이프',
+                    LayerKind.photo => '폴라로이드',
+                  },
+                  onEdit: () => _edit(pickedLayer!),
+                  onDelete: () => _remove(pickedLayer!),
+                  onDone: () => setState(() => _selected = null),
+                )
+              else if (pickedTicket != null)
+                _TicketBar(
+                  ticket: pickedTicket,
+                  onReset: () {
+                    _snapshot();
+                    setState(() {
+                      pickedTicket!
+                        ..pscale = 1.0
+                        ..protation = 0.0;
+                    });
+                    store.touch();
+                  },
+                  onDone: () => setState(() => _selected = null),
                 ),
 
               _Toolbar(
@@ -378,7 +528,157 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
   }
 }
 
-/// 페이지 위에서 옮기고 돌리고 키우는 레이어.
+/// 배치 방식을 알려주고 바꾸는 띠.
+class _LayoutBanner extends StatelessWidget {
+  const _LayoutBanner({
+    required this.free,
+    required this.hasTickets,
+    required this.onFree,
+    required this.onAuto,
+  });
+
+  final bool free;
+  final bool hasTickets;
+  final void Function({bool silent}) onFree;
+  final VoidCallback onAuto;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.stock,
+        border: Border(bottom: BorderSide(color: AppColors.line)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 9, 10, 9),
+        child: Row(
+          children: [
+            Icon(free ? Icons.open_with : Icons.auto_awesome_motion_outlined,
+                size: 16, color: AppColors.foil),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                free
+                    ? '티켓을 끌어 옮기고, 두 손가락으로 돌리세요'
+                    : (hasTickets
+                    ? '티켓은 자동으로 놓여 있습니다'
+                    : '티켓을 만들면 이 페이지에 붙습니다'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.ui(size: 12, color: AppColors.inkSoft),
+              ),
+            ),
+            if (hasTickets)
+              TextButton(
+                onPressed: free ? onAuto : () => onFree(),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.oxblood,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: Text(free ? '자동 배치' : '자유 배치',
+                    style:
+                    AppText.ui(size: 12, weight: FontWeight.w600)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyHint extends StatelessWidget {
+  const _EmptyHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('빈 페이지입니다',
+                style: AppText.hand(size: 24, color: AppColors.pulp)),
+            const SizedBox(height: 6),
+            const DoodleUnderline(width: 120),
+            const SizedBox(height: 10),
+            Text('아래에서 스티커·글자·테이프를 골라 붙이세요',
+                style: AppText.ui(size: 12, color: AppColors.pulp)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 자유 배치된 티켓 한 장.
+class _FreeTicket extends StatelessWidget {
+  const _FreeTicket({
+    super.key,
+    required this.ticket,
+    required this.index,
+    required this.canvas,
+    required this.selected,
+    required this.onSelect,
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+  });
+
+  final Ticket ticket;
+  final int index;
+  final Size canvas;
+  final bool selected;
+  final VoidCallback onSelect;
+  final VoidCallback onStart;
+  final ValueChanged<ScaleUpdateDetails> onUpdate;
+  final VoidCallback onEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final at = defaultTicketPlacement(index);
+    final x = (ticket.px ?? at.dx) * canvas.width;
+    final y = (ticket.py ?? at.dy) * canvas.height;
+    final width = canvas.width * freeTicketWidthFactor * ticket.pscale;
+
+    return Positioned(
+      left: x,
+      top: y,
+      child: FractionalTranslation(
+        translation: const Offset(-0.5, -0.5),
+        child: GestureDetector(
+          onTap: onSelect,
+          onScaleStart: (_) {
+            onSelect();
+            onStart();
+          },
+          onScaleUpdate: onUpdate,
+          onScaleEnd: (_) => onEnd(),
+          child: Transform.rotate(
+            angle: ticket.protation,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: selected
+                      ? AppColors.foil.withValues(alpha: 0.9)
+                      : Colors.transparent,
+                ),
+              ),
+              child: TapedTicket(
+                ticket: ticket,
+                width: width,
+                angle: 0,
+                tapeColor: scrapTapes[index % scrapTapes.length],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 페이지 위에서 옮기고 돌리고 키우는 장식 레이어.
 class _Editable extends StatelessWidget {
   const _Editable({
     super.key,
@@ -508,14 +808,68 @@ class _Handle extends StatelessWidget {
 
 class _SelectedBar extends StatelessWidget {
   const _SelectedBar({
+    required this.name,
     required this.onEdit,
     required this.onDelete,
     required this.onDone,
   });
 
+  final String name;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Bar(
+      name: name,
+      actions: [
+        _BarAction(Icons.tune, '고치기', onEdit),
+        _BarAction(Icons.delete_outline, '떼어내기', onDelete,
+            color: AppColors.oxblood),
+        _BarAction(Icons.check, '완료', onDone),
+      ],
+    );
+  }
+}
+
+class _TicketBar extends StatelessWidget {
+  const _TicketBar({
+    required this.ticket,
+    required this.onReset,
+    required this.onDone,
+  });
+
+  final Ticket ticket;
+  final VoidCallback onReset;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Bar(
+      name: ticket.title.replaceAll('\n', ' '),
+      actions: [
+        _BarAction(Icons.restart_alt, '크기·각도 초기화', onReset),
+        _BarAction(Icons.check, '완료', onDone),
+      ],
+    );
+  }
+}
+
+class _BarAction {
+  const _BarAction(this.icon, this.tip, this.onTap, {this.color});
+
+  final IconData icon;
+  final String tip;
+  final VoidCallback onTap;
+  final Color? color;
+}
+
+class _Bar extends StatelessWidget {
+  const _Bar({required this.name, required this.actions});
+
+  final String name;
+  final List<_BarAction> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -528,31 +882,31 @@ class _SelectedBar extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+        padding: const EdgeInsets.fromLTRB(16, 5, 8, 5),
         child: Row(
           children: [
-            Text('고른 조각',
+            Container(
+              width: 3,
+              height: 18,
+              margin: const EdgeInsets.only(right: 10),
+              color: AppColors.foil,
+            ),
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppText.ui(
-                    size: 12,
-                    weight: FontWeight.w600,
-                    color: AppColors.ink)),
-            const Spacer(),
-            IconButton(
-              tooltip: '고치기',
-              onPressed: onEdit,
-              icon: const Icon(Icons.tune, size: 19, color: AppColors.ink),
+                    size: 12, weight: FontWeight.w600, color: AppColors.ink),
+              ),
             ),
-            IconButton(
-              tooltip: '떼어내기',
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline,
-                  size: 19, color: AppColors.oxblood),
-            ),
-            IconButton(
-              tooltip: '완료',
-              onPressed: onDone,
-              icon: const Icon(Icons.check, size: 19, color: AppColors.ink),
-            ),
+            for (final a in actions)
+              IconButton(
+                tooltip: a.tip,
+                onPressed: a.onTap,
+                visualDensity: VisualDensity.compact,
+                icon: Icon(a.icon, size: 19, color: a.color ?? AppColors.ink),
+              ),
           ],
         ),
       ),

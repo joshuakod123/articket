@@ -14,7 +14,6 @@ import '../widgets/paper_toast.dart';
 import 'calendar_screen.dart';
 import 'folder_screen.dart';
 import 'folder_workbench.dart';
-import 'market_screen.dart';
 import 'profile_screen.dart';
 
 /// 앱의 첫 화면. 가로 서류철이 겹쳐 쌓인 파일 드로어.
@@ -320,44 +319,80 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _BottomBar extends StatelessWidget {
+/// 아래 탭바.
+///
+/// 머티리얼 기본 탭바 대신 **서류철 인덱스 탭**을 눕혀놓은 모양입니다.
+/// 고른 항목 뒤로 종이 탭이 한 장 솟아오르고, 위에는 황동 헤어라인이 지납니다.
+/// 마켓은 아직 붙일 것이 없어 이번에 뺐습니다.
+class _BottomBar extends StatefulWidget {
   const _BottomBar();
+
+  @override
+  State<_BottomBar> createState() => _BottomBarState();
+}
+
+class _BottomBarState extends State<_BottomBar> {
+  int _active = 0;
+
+  static const _items = [
+    (NavSymbol.stamp, '아카이브'),
+    (NavSymbol.dateStamp, '캘린더'),
+    (NavSymbol.pin, '내 정보'),
+  ];
+
+  Future<void> _go(int i) async {
+    if (i == 0) return;
+    setState(() => _active = i);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+        i == 1 ? const CalendarScreen() : const ProfileScreen(),
+      ),
+    );
+    // 돌아오면 다시 아카이브가 활성입니다.
+    if (mounted) setState(() => _active = 0);
+  }
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AppColors.stock,
-        border: Border(top: BorderSide(color: AppColors.line)),
-      ),
+      decoration: const BoxDecoration(color: AppColors.stock),
       child: Stack(
         children: [
-          // 탭바도 종이 위입니다.
           const WallGrain(opacity: 0.05, seed: 12),
+
+          // 위쪽 두 줄. 얇은 잉크선 + 그 아래 황동 헤어라인.
+          const Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: Column(
+              children: [
+                Divider(height: 1, thickness: 1, color: AppColors.line),
+                SizedBox(
+                  height: 1,
+                  child: ColoredBox(color: Color(0x338C7134)),
+                ),
+              ],
+            ),
+          ),
+
           SafeArea(
             top: false,
             child: SizedBox(
-              height: 60,
+              height: 62,
               child: Row(
                 children: [
-                  _item(context, NavSymbol.stamp, '아카이브', true, null),
-                  _item(context, NavSymbol.tag, '마켓', false, () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const MarketScreen()),
-                    );
-                  }),
-                  _item(context, NavSymbol.dateStamp, '캘린더', false, () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          builder: (_) => const CalendarScreen()),
-                    );
-                  }),
-                  _item(context, NavSymbol.pin, '내 정보', false, () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          builder: (_) => const ProfileScreen()),
-                    );
-                  }),
+                  for (var i = 0; i < _items.length; i++)
+                    Expanded(
+                      child: _Tab(
+                        symbol: _items[i].$1,
+                        label: _items[i].$2,
+                        active: _active == i,
+                        onTap: () => _go(i),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -366,24 +401,67 @@ class _BottomBar extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _item(BuildContext context, NavSymbol symbol, String label,
-      bool active, VoidCallback? onTap) {
+/// 탭 한 칸. 고르면 뒤로 종이 인덱스 탭이 솟습니다.
+class _Tab extends StatelessWidget {
+  const _Tab({
+    required this.symbol,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final NavSymbol symbol;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     final color = active ? AppColors.oxblood : AppColors.inkSoft;
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            NavIcon(symbol: symbol, color: color, size: 21, filled: active),
-            const SizedBox(height: 5),
-            Text(label,
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.stockLight
+                : AppColors.stockLight.withValues(alpha: 0),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+            border: Border(
+              top: BorderSide(
+                color: active ? AppColors.foil : Colors.transparent,
+                width: 1.4,
+              ),
+              left: BorderSide(
+                color: active ? AppColors.line : Colors.transparent,
+              ),
+              right: BorderSide(
+                color: active ? AppColors.line : Colors.transparent,
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              NavIcon(symbol: symbol, color: color, size: 20, filled: active),
+              const SizedBox(height: 4),
+              Text(
+                label,
                 style: AppText.ui(
-                    size: 10,
-                    weight: active ? FontWeight.w600 : FontWeight.w400,
-                    color: color)),
-          ],
+                  size: 10,
+                  weight: active ? FontWeight.w600 : FontWeight.w400,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

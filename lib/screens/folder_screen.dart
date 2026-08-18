@@ -9,10 +9,12 @@ import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
+import '../widgets/scrap_page.dart';
 import '../widgets/scrapbook.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/ticket_canvas.dart';
 import 'page_decor_screen.dart';
+import 'share_card_screen.dart';
 import 'ticket_detail_screen.dart';
 
 /// 보기 방식. 기본은 스크랩북(펼친 다이어리)입니다.
@@ -20,9 +22,9 @@ enum FolderView { book, grid, list }
 
 /// 서류철 내부.
 ///
-/// 서류철을 열면 손으로 꾸민 스크랩북이 펼쳐집니다. 페이지를 옆으로 넘기면
-/// 티켓이 마스킹 테이프로 붙어 있고, 옆에 손글씨로 감상이 적혀 있습니다.
-/// 바인더(3열 그리드)와 목록으로도 볼 수 있습니다.
+/// 서류철을 열면 손으로 꾸민 스크랩북이 펼쳐집니다.
+/// 자동 배치에서는 티켓이 두 장씩 테이프로 붙고 옆에 손글씨 메모가 붙습니다.
+/// 자유 배치(`folder.freeLayout`)에서는 한 장에 전부 모아 사용자가 직접 앉힙니다.
 class FolderScreen extends StatefulWidget {
   const FolderScreen({super.key, required this.folder});
 
@@ -35,6 +37,9 @@ class FolderScreen extends StatefulWidget {
 class _FolderScreenState extends State<FolderScreen> {
   final store = TicketStore.instance;
   final _pages = PageController();
+
+  /// 공유 카드에 쓸 페이지 스냅샷 대상.
+  final _pageKey = GlobalKey();
 
   FolderView _view = FolderView.book;
   double _page = 0;
@@ -75,6 +80,11 @@ class _FolderScreenState extends State<FolderScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: '공유하기',
+            onPressed: _share,
+            icon: const Icon(Icons.ios_share),
+          ),
+          IconButton(
             tooltip: '페이지 꾸미기',
             onPressed: _decorate,
             icon: const Icon(Icons.brush_outlined),
@@ -109,7 +119,9 @@ class _FolderScreenState extends State<FolderScreen> {
               }
 
               return switch (_view) {
-                FolderView.book => _book(tickets),
+                FolderView.book => widget.folder.freeLayout
+                    ? _freeBook(tickets)
+                    : _book(tickets),
                 FolderView.grid => _grid(tickets),
                 FolderView.list => _list(tickets),
               };
@@ -127,7 +139,7 @@ class _FolderScreenState extends State<FolderScreen> {
     );
   }
 
-  // ── 스크랩북 ─────────────────────────────────────
+  // ── 스크랩북 (자동 배치) ──────────────────────────
 
   Widget _book(List<Ticket> tickets) {
     // 한 페이지에 두 장씩 붙입니다.
@@ -150,6 +162,19 @@ class _FolderScreenState extends State<FolderScreen> {
                 ..setEntry(3, 2, 0.0011)
                 ..rotateY(delta * 0.42);
 
+              final page = _DecoratedPage(
+                folder: widget.folder,
+                seed: widget.folder.id.hashCode + i,
+                footer:
+                'PAGE ${(i + 1).toString().padLeft(2, '0')} / ${pages.length.toString().padLeft(2, '0')}',
+                child: AutoScrapPage(
+                  tickets: pages[i],
+                  pageIndex: i,
+                  onOpen: _openTicket,
+                  onDelete: _confirmDelete,
+                ),
+              );
+
               return Transform(
                 alignment:
                 delta >= 0 ? Alignment.centerLeft : Alignment.centerRight,
@@ -159,28 +184,10 @@ class _FolderScreenState extends State<FolderScreen> {
                   child: DecoratedBox(
                     decoration:
                     BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
-                    child: _DecoratedPage(
-                      folder: widget.folder,
-                      seed: widget.folder.id.hashCode + i,
-                      footer:
-                      'PAGE ${(i + 1).toString().padLeft(2, '0')} / ${pages.length.toString().padLeft(2, '0')}',
-                      child: Column(
-                        children: [
-                          for (var k = 0; k < pages[i].length; k++)
-                            Expanded(
-                              child: _ScrapEntry(
-                                ticket: pages[i][k],
-                                flip: (i + k).isOdd,
-                                slot: i * 2 + k,
-                                onOpen: () => _openTicket(pages[i][k]),
-                                onDelete: () => _confirmDelete(pages[i][k]),
-                              ),
-                            ),
-                          if (pages[i].length == 1)
-                            const Expanded(child: _EmptySlot()),
-                        ],
-                      ),
-                    ),
+                    // 지금 보고 있는 페이지만 공유 대상으로 표시합니다.
+                    child: i == _page.round()
+                        ? RepaintBoundary(key: _pageKey, child: page)
+                        : page,
                   ),
                 ),
               );
@@ -190,6 +197,53 @@ class _FolderScreenState extends State<FolderScreen> {
         _PageDots(count: pages.length, page: _page),
         const SizedBox(height: 10),
       ],
+    );
+  }
+
+  // ── 스크랩북 (자유 배치) ──────────────────────────
+
+  /// 사용자가 직접 앉힌 자리 그대로 한 장에 펼칩니다.
+  ///
+  /// 좌표와 기본 자리는 꾸미기 화면과 **같은 함수**([defaultTicketPlacement])를
+  /// 쓰므로, 거기서 본 그림이 그대로 나옵니다.
+  Widget _freeBook(List<Ticket> tickets) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+      child: DecoratedBox(
+        decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
+        child: RepaintBoundary(
+          key: _pageKey,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final canvas = Size(c.maxWidth, c.maxHeight);
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: NotebookPage(
+                      seed: widget.folder.id.hashCode,
+                      eyebrow: widget.folder.subtitle,
+                      title: widget.folder.label,
+                      footer: 'FREE LAYOUT',
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                  for (var i = 0; i < tickets.length; i++)
+                    _PlacedTicket(
+                      ticket: tickets[i],
+                      index: i,
+                      canvas: canvas,
+                      onTap: () => _openTicket(tickets[i]),
+                      onLongPress: () => _confirmDelete(tickets[i]),
+                    ),
+                  for (final l in widget.folder.pageLayers)
+                    PlacedLayer(layer: l, canvas: canvas),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -248,8 +302,6 @@ class _FolderScreenState extends State<FolderScreen> {
         Text(widget.folder.subtitle,
             style: AppText.display(size: 30, color: AppColors.ink)),
         const SizedBox(height: 6),
-        // 목록 보기에는 티켓마다 휴지통이 붙어 있어서, 길게 누르기 말고도
-        // 지울 방법이 있다는 걸 알려줍니다.
         Text('$count장 · 목록 보기에서 하나씩 정리할 수 있습니다',
             style: AppText.data(size: 10, color: AppColors.inkSoft)),
       ],
@@ -266,11 +318,32 @@ class _FolderScreenState extends State<FolderScreen> {
     );
   }
 
-  /// 페이지 배경 꾸미기.
   void _decorate() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PageDecorScreen(folderId: widget.folder.id),
+      ),
+    );
+  }
+
+  /// 지금 보고 있는 페이지를 9:16 카드로 만들어 내보냅니다.
+  void _share() {
+    if (_view != FolderView.book) setState(() => _view = FolderView.book);
+
+    final count = store.countIn(widget.folder.id);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ShareCardScreen(
+          artwork: AspectRatio(
+            aspectRatio: 0.72,
+            child: _SharePage(folder: widget.folder, store: store),
+          ),
+          title: widget.folder.subtitle,
+          subtitle: '${widget.folder.label} · 티켓 $count장',
+          meta: 'SCRAPBOOK',
+          fileName: 'articket_page',
+          shareText: '${widget.folder.subtitle} — ARTICKET',
+        ),
       ),
     );
   }
@@ -295,10 +368,7 @@ class _FolderScreenState extends State<FolderScreen> {
     );
   }
 
-  /// 티켓 삭제. 상세 화면의 삭제와 같은 문구를 씁니다.
-  ///
-  /// 발권 번호(AK-…)는 내부 식별자라 사람이 확인할 정보가 아닙니다.
-  /// 무엇을 지우는지 **제목으로** 묻습니다.
+  /// 티켓 삭제. 발권 번호(AK-…)는 내부 식별자라 제목으로 묻습니다.
   Future<void> _confirmDelete(Ticket ticket) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -333,15 +403,11 @@ class _FolderScreenState extends State<FolderScreen> {
   }
 }
 
-/// 노트 속지 + **사용자가 꾸민 페이지 장식**.
+/// 노트 속지 + 사용자가 꾸민 페이지 장식.
 ///
-/// 장식은 `ArchiveFolder.pageLayers`에 서류철 단위로 저장됩니다.
-/// 좌표 기준은 `PageDecorScreen`과 똑같이 **페이지 한 장 전체**라서,
-/// 꾸미기 화면에서 놓은 자리에 그대로 앉습니다.
-///
-/// 티켓보다 위에 그리지만 [PlacedLayer]가 `IgnorePointer`를 물고 있어서
-/// 탭은 아래 티켓으로 그냥 통과합니다. 스티커가 티켓을 가려도 여는 데
-/// 지장이 없습니다.
+/// 좌표 기준은 `PageDecorScreen`과 똑같이 **페이지 한 장 전체**입니다.
+/// 장식은 티켓보다 위에 그리지만 [PlacedLayer]가 `IgnorePointer`를 물고 있어서
+/// 탭은 아래 티켓으로 통과합니다.
 class _DecoratedPage extends StatelessWidget {
   const _DecoratedPage({
     required this.folder,
@@ -360,7 +426,6 @@ class _DecoratedPage extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final canvas = Size(c.maxWidth, c.maxHeight);
-
         return Stack(
           children: [
             Positioned.fill(
@@ -381,169 +446,90 @@ class _DecoratedPage extends StatelessWidget {
   }
 }
 
-/// 스크랩북 페이지에 붙인 티켓 한 장 + 손글씨 기록.
-class _ScrapEntry extends StatelessWidget {
-  const _ScrapEntry({
+/// 자유 배치로 앉힌 티켓 한 장.
+class _PlacedTicket extends StatelessWidget {
+  const _PlacedTicket({
     required this.ticket,
-    required this.flip,
-    required this.slot,
-    required this.onOpen,
-    required this.onDelete,
+    required this.index,
+    required this.canvas,
+    required this.onTap,
+    required this.onLongPress,
   });
 
   final Ticket ticket;
-
-  /// 짝수/홀수 칸마다 좌우를 바꿔 붙입니다.
-  final bool flip;
-  final int slot;
-  final VoidCallback onOpen;
-  final VoidCallback onDelete;
-
-  static const _tapes = <Color>[
-    Color(0x998C7134),
-    Color(0x993F4A3C),
-    Color(0x996B1F1A),
-    Color(0x992E3B4E),
-  ];
+  final int index;
+  final Size canvas;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
+    final at = defaultTicketPlacement(index);
+    return Positioned(
+      left: (ticket.px ?? at.dx) * canvas.width,
+      top: (ticket.py ?? at.dy) * canvas.height,
+      child: FractionalTranslation(
+        translation: const Offset(-0.5, -0.5),
+        child: Transform.rotate(
+          angle: ticket.protation,
+          child: TapedTicket(
+            ticket: ticket,
+            width: canvas.width * freeTicketWidthFactor * ticket.pscale,
+            angle: 0,
+            tapeColor: scrapTapes[index % scrapTapes.length],
+            onTap: onTap,
+            onLongPress: onLongPress,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 공유 카드에 들어갈 페이지 한 장. (제스처 없이 그림만)
+class _SharePage extends StatelessWidget {
+  const _SharePage({required this.folder, required this.store});
+
+  final ArchiveFolder folder;
+  final TicketStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final tickets = store.ticketsIn(folder.id);
+
     return LayoutBuilder(
       builder: (context, c) {
-        // 테이프가 삐져나올 자리를 남기고 티켓 크기를 잡습니다.
-        var th = c.maxHeight - 26;
-        var tw = th * ticket.frame.aspect;
-        final maxW = c.maxWidth * 0.44;
-        if (tw > maxW) {
-          tw = maxW;
-          th = tw / ticket.frame.aspect;
-        }
-        if (th < 40) th = 40;
+        final canvas = Size(c.maxWidth, c.maxHeight);
 
-        final angle = (slot.isEven ? 1 : -1) * (0.022 + (slot % 3) * 0.008);
-
-        final card = SizedBox(
-          width: tw,
-          height: th,
-          child: GestureDetector(
-            onTap: onOpen,
-            onLongPress: onDelete,
-            child: TapedItem(
-              angle: angle,
-              tapeColor: _tapes[slot % _tapes.length],
-              child: TicketCanvas(ticket: ticket, compact: true),
-            ),
-          ),
-        );
-
-        final memo = _Memo(ticket: ticket, slot: slot);
-
-        final children = flip
-            ? [Expanded(child: memo), const SizedBox(width: 18), card]
-            : [card, const SizedBox(width: 18), Expanded(child: memo)];
-
-        return Padding(
-          padding: const EdgeInsets.all(6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: children,
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 티켓 옆에 손으로 적어둔 기록.
-class _Memo extends StatelessWidget {
-  const _Memo({required this.ticket, required this.slot});
-
-  final Ticket ticket;
-  final int slot;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+        return Stack(
+          clipBehavior: Clip.none,
           children: [
-            Text(ticket.dateLabel,
-                style: AppText.data(
-                    size: 8.5, spacing: 1.2, color: AppColors.inkSoft)),
-            const SizedBox(width: 6),
-            if (slot % 3 == 0) const DoodleStar(size: 15),
-          ],
-        ),
-        const SizedBox(height: 5),
-        Flexible(
-          child: Text(
-            ticket.title.replaceAll('\n', ' '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.ui(
-                size: 13.5,
-                weight: FontWeight.w700,
-                height: 1.25,
-                color: AppColors.ink),
-          ),
-        ),
-        const SizedBox(height: 3),
-        const DoodleUnderline(width: 74),
-        const SizedBox(height: 7),
-        Flexible(
-          child: Text(
-            ticket.oneLiner.isEmpty ? '아직 아무 말도 적지 않았다.' : ticket.oneLiner,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.hand(
-              size: 19,
-              height: 1.15,
-              color:
-              ticket.oneLiner.isEmpty ? AppColors.pulp : AppColors.oxblood,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Text('★' * ticket.rating,
-                style: AppText.data(
-                    size: 9, spacing: 0.4, color: AppColors.foil)),
-            if (ticket.rating > 0) const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                ticket.venue,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.ui(size: 10, color: AppColors.inkSoft),
+            Positioned.fill(
+              child: NotebookPage(
+                seed: folder.id.hashCode,
+                eyebrow: folder.subtitle,
+                title: folder.label,
+                footer: 'ARTICKET',
+                child: folder.freeLayout
+                    ? const SizedBox.expand()
+                    : AutoScrapPage(
+                    tickets: tickets.take(2).toList(), pageIndex: 0),
               ),
             ),
+            if (folder.freeLayout)
+              for (var i = 0; i < tickets.length; i++)
+                _PlacedTicket(
+                  ticket: tickets[i],
+                  index: i,
+                  canvas: canvas,
+                  onTap: () {},
+                  onLongPress: () {},
+                ),
+            for (final l in folder.pageLayers)
+              PlacedLayer(layer: l, canvas: canvas),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-/// 페이지가 한 칸 비었을 때 채우는 빈 자리.
-class _EmptySlot extends StatelessWidget {
-  const _EmptySlot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('다음 장을 기다리는 중',
-              style: AppText.hand(size: 20, color: AppColors.pulp)),
-          const SizedBox(height: 6),
-          const DoodleUnderline(width: 110),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -602,7 +588,6 @@ class _GridCell extends StatelessWidget {
         child: AspectRatio(
           aspectRatio: ticket.frame.aspect,
           child: DecoratedBox(
-            // 밝은 벽 위에서 종이가 떠 보이도록 얕은 그림자.
             decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.45)),
             child: Hero(
               tag: 'ticket-${ticket.id}',

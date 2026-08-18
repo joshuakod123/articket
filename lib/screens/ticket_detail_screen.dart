@@ -9,10 +9,10 @@ import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/paper.dart';
-import '../widgets/paper_toast.dart';
 import '../widgets/ticket_canvas.dart';
 import '../widgets/ticket_card.dart';
 import 'editor_screen.dart';
+import 'share_card_screen.dart';
 import 'ticket_style_sheet.dart';
 
 // 에디터가 이 파일에서 가져다 쓰던 이름을 그대로 다시 내보냅니다.
@@ -117,13 +117,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 ),
               ),
               IconButton(
-                tooltip: '내보내기',
+                tooltip: '공유하기',
                 icon: const Icon(Icons.ios_share),
-                onPressed: () => PaperToast.show(
-                  context,
-                  '9:16 내보내기는 Phase 1 후반에 붙습니다',
-                  detail: 'ROADMAP · PHASE 1',
-                ),
+                onPressed: () => _share(ticket),
               ),
               IconButton(
                 tooltip: '버리기',
@@ -184,6 +180,25 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
           ),
         );
       },
+    );
+  }
+
+  /// 티켓 한 장을 9:16 카드로 만들어 SNS로 내보냅니다.
+  void _share(Ticket ticket) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ShareCardScreen(
+          artwork: AspectRatio(
+            aspectRatio: ticket.frame.aspect,
+            child: TicketCanvas(ticket: ticket),
+          ),
+          title: ticket.title.replaceAll('\n', ' '),
+          subtitle: '${ticket.venue} · ${ticket.dateLabel}',
+          meta: ticket.rating > 0 ? '★' * ticket.rating : '',
+          fileName: 'articket_ticket',
+          shareText: '${ticket.title.replaceAll('\n', ' ')} — ARTICKET',
+        ),
+      ),
     );
   }
 
