@@ -243,6 +243,14 @@ class StickerPainter extends CustomPainter {
     return p..close();
   }
 
+  /// 원 두 개 + 아래로 모이는 삼각형. 손으로 그린 하트에 가깝게 살짝 통통합니다.
+  Path _heart(double w, double h) {
+    final p = Path()..moveTo(w * 0.5, h * 0.86);
+    p.cubicTo(w * 0.02, h * 0.54, w * 0.14, h * 0.12, w * 0.5, h * 0.32);
+    p.cubicTo(w * 0.86, h * 0.12, w * 0.98, h * 0.54, w * 0.5, h * 0.86);
+    return p..close();
+  }
+
   Path _sparkle(double w, double h) {
     final p = Path();
     for (var i = 0; i < 4; i++) {

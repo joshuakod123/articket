@@ -307,10 +307,10 @@ class NotebookPage extends StatelessWidget {
         ),
 
         // 5) 제본.
-        Positioned(left: 0, top: 0, bottom: 0, child: const BindingGutter()),
+        const Positioned(left: 0, top: 0, bottom: 0, child: BindingGutter()),
 
         // 6) 바깥으로 들린 결 + 뜯긴 가장자리.
-        Positioned(right: 0, top: 0, bottom: 0, child: const PageCurl()),
+        const Positioned(right: 0, top: 0, bottom: 0, child: PageCurl()),
         Positioned.fill(
           child: IgnorePointer(
             child: RepaintBoundary(

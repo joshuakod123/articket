@@ -162,13 +162,14 @@ class _ColorRail extends StatelessWidget {
     required this.colors,
     required this.selected,
     required this.onPick,
-    this.height = 44,
   });
 
   final List<Color> colors;
   final Color selected;
   final ValueChanged<Color> onPick;
-  final double height;
+
+  /// 견본 한 칸의 지름 + 여백.
+  static const height = 44.0;
 
   @override
   Widget build(BuildContext context) {

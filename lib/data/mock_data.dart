@@ -7,37 +7,48 @@ import '../theme/folder_style.dart';
 
 /// 화면을 채우기 위한 임시 데이터. Phase 1에서 로컬 DB로 교체합니다.
 final List<ArchiveFolder> mockFolders = [
-  ArchiveFolder(
-    id: 'f2026',
-    label: '2026 ARCHIVE',
-    subtitle: '올해 다녀온 전시',
-    color: AppColors.tabColors[0],
-  ),
-  ArchiveFolder(
-    id: 'f2025',
-    label: '2025 ARCHIVE',
-    subtitle: '작년 기록',
-    color: AppColors.tabColors[1],
-  ),
-  ArchiveFolder(
-    id: 'fmedia',
-    label: 'MEDIA ART',
-    subtitle: '미디어아트만 모아보기',
-    color: AppColors.tabColors[2],
-  ),
-  ArchiveFolder(
-    id: 'fphoto',
-    label: 'PHOTO',
-    subtitle: '사진전',
-    color: AppColors.tabColors[3],
-  ),
-  ArchiveFolder(
-    id: 'fdraft',
-    label: 'UNFILED',
-    subtitle: '아직 정리하지 않은 티켓',
-    color: AppColors.tabColors[4],
-  ),
+ArchiveFolder(
+id: 'f2026',
+label: '2026 ARCHIVE',
+subtitle: '올해 다녀온 전시',
+color: AppColors.tabColors[0],
+font: FolderFont.dymo,
+texture: FolderTexture.leather,
+),
+ArchiveFolder(
+id: 'f2025',
+label: '2025 ARCHIVE',
+subtitle: '작년 기록',
+color: AppColors.tabColors[1],
+font: FolderFont.typewriter,
+texture: FolderTexture.linen,
+),
+ArchiveFolder(
+id: 'fmedia',
+label: '미디어아트',
+subtitle: '미디어아트만 모아보기',
+color: AppColors.tabColors[2],
+font: FolderFont.serif,
+texture: FolderTexture.marble,
+),
+ArchiveFolder(
+id: 'fphoto',
+label: '사진',
+subtitle: '사진전',
+color: AppColors.tabColors[3],
+font: FolderFont.hand,
+texture: FolderTexture.kraft,
+),
+ArchiveFolder(
+id: 'fdraft',
+label: 'UNFILED',
+subtitle: '아직 정리하지 않은 티켓',
+color: AppColors.tabColors[4],
+font: FolderFont.poster,
+texture: FolderTexture.pressboard,
+),
 ];
+
 
 final List<Ticket> mockTickets = [
   Ticket(

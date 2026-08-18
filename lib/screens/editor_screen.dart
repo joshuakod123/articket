@@ -111,10 +111,14 @@ class _EditorScreenState extends State<EditorScreen> {
           return const Scaffold(body: Center(child: Text('삭제된 티켓입니다')));
         }
 
-        ScrapLayer? selected;
+        // 루프에서 바로 쓰면 널 승격(promotion)이 안 걸려서
+        // `_LayerBar(layer: selected)`가 ScrapLayer? 로 남습니다.
+        // 찾은 값을 final 지역 변수에 한 번 옮겨 담아 확정합니다.
+        ScrapLayer? found;
         for (final l in ticket.layers) {
-          if (l.id == _selectedId) selected = l;
+          if (l.id == _selectedId) found = l;
         }
+        final selected = found;
 
         return Scaffold(
           appBar: AppBar(

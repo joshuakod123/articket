@@ -534,7 +534,7 @@ class _DogEarPainter extends CustomPainter {
 
     // 접힌 선에 지는 그늘.
     canvas.drawLine(
-      Offset(0, 0),
+      Offset.zero,
       Offset(w, h),
       Paint()
         ..color = Colors.black.withValues(alpha: 0.22)

@@ -7,10 +7,13 @@ import 'paper.dart';
 
 /// 빈 티켓 한 장의 실루엣. 좌우에 반원 타공, 왼쪽 1/3 지점에 절취선.
 class _StubShape extends CustomClipper<Path> {
-  _StubShape({this.radius = 4, this.notch = 7});
+  const _StubShape();
 
-  final double radius;
-  final double notch;
+  /// 모서리 라운드.
+  static const radius = 4.0;
+
+  /// 좌우 반원 타공의 반지름.
+  static const notch = 7.0;
 
   @override
   Path getClip(Size size) {
@@ -130,19 +133,19 @@ class _TicketStubButtonState extends State<TicketStubButton>
           child: DecoratedBox(
             decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.5)),
             child: ClipPath(
-              clipper: _StubShape(),
+              clipper: const _StubShape(),
               child: SizedBox(
                 width: widget.width,
                 height: widget.height,
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: PaperSurface(
+                      child: const PaperSurface(
                         color: AppColors.oxblood,
                         grain: 0.10,
                         seed: 77,
                         fiber: 0.8,
-                        child: const SizedBox.expand(),
+                        child: SizedBox.expand(),
                       ),
                     ),
 

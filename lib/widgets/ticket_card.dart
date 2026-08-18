@@ -117,7 +117,7 @@ class TicketFront extends StatelessWidget {
               : _posterBlock(),
         ),
         if (f.hasPerforation)
-          PerforationLine(color: AppColors.pulp, inset: 14),
+          const PerforationLine(color: AppColors.pulp, inset: 14),
         Expanded(
           flex: 100 - f.flexPoster,
           child: Padding(
@@ -135,7 +135,8 @@ class TicketFront extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(flex: ticket.frame.flexPoster, child: _posterBlock()),
-        PerforationLine(color: AppColors.pulp, vertical: true, inset: 12),
+        const PerforationLine(
+            color: AppColors.pulp, vertical: true, inset: 12),
         Expanded(
           flex: 100 - ticket.frame.flexPoster,
           child: Padding(
