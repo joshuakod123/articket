@@ -1,12 +1,21 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 /// 하단 탭바 심볼.
 ///
-/// 머티리얼 기본 아이콘 대신 우표·가격표·날짜 스탬프·압정을 직접 그립니다.
-/// 전부 획(stroke) 기반이고, 선택된 탭만 속을 옅게 채워 도장처럼 눌린 느낌을 냅니다.
-enum NavSymbol { stamp, tag, dateStamp, pin }
+/// 예전 심볼(우표·압정)은 획이 너무 잘고 `Path.combine`으로 구멍을 뚫어서,
+/// 20pt로 줄이면 뭉개지거나 아예 안 보였습니다. 여기서는
+/// **선 몇 개로만 이루어진 큰 실루엣**으로 다시 그립니다.
+/// 전부 정규화 좌표라 어떤 크기에서도 같은 비율로 나옵니다.
+enum NavSymbol {
+  /// 인덱스 탭이 달린 서류철. 홈(서랍).
+  drawer,
+
+  /// 스프링 제본 탁상 달력.
+  calendar,
+
+  /// 관람 회원증. 내 기록.
+  member,
+}
 
 class NavIcon extends StatelessWidget {
   const NavIcon({
@@ -20,12 +29,15 @@ class NavIcon extends StatelessWidget {
   final NavSymbol symbol;
   final Color color;
   final double size;
+
+  /// 고른 탭만 속을 옅게 채워 도장처럼 눌린 느낌을 냅니다.
   final bool filled;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: size,
+    return SizedBox(
+      width: size,
+      height: size,
       child: CustomPaint(
         painter: _NavPainter(symbol: symbol, color: color, filled: filled),
       ),
@@ -44,121 +56,130 @@ class _NavPainter extends CustomPainter {
   final Color color;
   final bool filled;
 
-  Paint get _stroke => Paint()
+  Paint _stroke(double w) => Paint()
     ..color = color
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.4
+    ..strokeWidth = w
     ..strokeJoin = StrokeJoin.round
     ..strokeCap = StrokeCap.round;
 
-  Paint get _wash => Paint()..color = color.withValues(alpha: 0.22);
+  Paint get _wash => Paint()
+    ..color = color.withValues(alpha: 0.18)
+    ..style = PaintingStyle.fill;
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 획 두께는 아이콘 크기에 비례시킵니다. 22pt 기준 1.5.
+    final w = size.width / 22 * 1.5;
+
     switch (symbol) {
-      case NavSymbol.stamp:
-        _stamp(canvas, size);
-      case NavSymbol.tag:
-        _tag(canvas, size);
-      case NavSymbol.dateStamp:
-        _dateStamp(canvas, size);
-      case NavSymbol.pin:
-        _pin(canvas, size);
+      case NavSymbol.drawer:
+        _drawer(canvas, size, w);
+      case NavSymbol.calendar:
+        _calendar(canvas, size, w);
+      case NavSymbol.member:
+        _member(canvas, size, w);
     }
   }
 
-  /// 우표. 사방이 스캘럽으로 뜯긴 사각형.
-  void _stamp(Canvas canvas, Size size) {
-    final r = Rect.fromLTWH(2.5, 2.0, size.width - 5, size.height - 5);
-    const step = 3.4;
-    const bite = 1.5;
+  /// 인덱스 탭이 솟은 서류철. 앱 메인 메타포와 같은 모양입니다.
+  void _drawer(Canvas canvas, Size size, double w) {
+    final sw = size.width;
+    final sh = size.height;
 
-    var body = Path()..addRect(r);
-    final holes = Path();
-    for (double x = r.left + step / 2; x < r.right; x += step) {
-      holes
-        ..addOval(Rect.fromCircle(center: Offset(x, r.top), radius: bite))
-        ..addOval(Rect.fromCircle(center: Offset(x, r.bottom), radius: bite));
-    }
-    for (double y = r.top + step / 2; y < r.bottom; y += step) {
-      holes
-        ..addOval(Rect.fromCircle(center: Offset(r.left, y), radius: bite))
-        ..addOval(Rect.fromCircle(center: Offset(r.right, y), radius: bite));
-    }
-    body = Path.combine(PathOperation.difference, body, holes);
-
-    if (filled) canvas.drawPath(body, _wash);
-    canvas.drawPath(body, _stroke..strokeWidth = 1.2);
-    canvas.drawRect(r.deflate(3.6), _stroke..strokeWidth = 0.9);
-  }
-
-  /// 가격표. 실을 꿴 구멍이 뚫린 태그.
-  void _tag(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final path = Path()
-      ..moveTo(w * 0.20, h * 0.17)
-      ..lineTo(w * 0.60, h * 0.17)
-      ..lineTo(w * 0.87, h * 0.50)
-      ..lineTo(w * 0.60, h * 0.83)
-      ..lineTo(w * 0.20, h * 0.83)
+    final body = Path()
+      ..moveTo(sw * 0.09, sh * 0.82)
+      ..lineTo(sw * 0.09, sh * 0.26)
+      ..lineTo(sw * 0.42, sh * 0.26)
+      ..lineTo(sw * 0.50, sh * 0.38)
+      ..lineTo(sw * 0.91, sh * 0.38)
+      ..lineTo(sw * 0.91, sh * 0.82)
       ..close();
 
-    if (filled) canvas.drawPath(path, _wash);
-    canvas.drawPath(path, _stroke);
-    canvas.drawCircle(Offset(w * 0.34, h * 0.50), 2.0, _stroke..strokeWidth = 1.2);
+    if (filled) canvas.drawPath(body, _wash);
+    canvas.drawPath(body, _stroke(w));
+
+    // 앞장이 덮인 자리. 서류철이 두 겹이라는 표시.
+    canvas.drawLine(
+      Offset(sw * 0.09, sh * 0.52),
+      Offset(sw * 0.91, sh * 0.52),
+      _stroke(w * 0.75),
+    );
   }
 
-  /// 날짜 스탬프. 고리 두 개가 달린 달력 한 장.
-  void _dateStamp(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
+  /// 스프링 제본 탁상 달력.
+  void _calendar(Canvas canvas, Size size, double w) {
+    final sw = size.width;
+    final sh = size.height;
+
     final body = RRect.fromRectAndRadius(
-      Rect.fromLTWH(2.5, h * 0.26, w - 5, h * 0.60),
-      const Radius.circular(2),
+      Rect.fromLTRB(sw * 0.09, sh * 0.26, sw * 0.91, sh * 0.86),
+      Radius.circular(sw * 0.06),
     );
 
     if (filled) canvas.drawRRect(body, _wash);
-    canvas.drawRRect(body, _stroke);
+    canvas.drawRRect(body, _stroke(w));
 
-    for (final x in [w * 0.34, w * 0.66]) {
-      canvas.drawLine(Offset(x, h * 0.11), Offset(x, h * 0.32), _stroke);
+    // 제본 고리 둘.
+    for (final x in [sw * 0.33, sw * 0.67]) {
+      canvas.drawLine(
+        Offset(x, sh * 0.12),
+        Offset(x, sh * 0.34),
+        _stroke(w),
+      );
     }
+
+    // 머리글 칸.
     canvas.drawLine(
-      Offset(w * 0.16, h * 0.46),
-      Offset(w * 0.84, h * 0.46),
-      _stroke..strokeWidth = 1.0,
+      Offset(sw * 0.09, sh * 0.45),
+      Offset(sw * 0.91, sh * 0.45),
+      _stroke(w * 0.75),
     );
+
+    // 날짜 셋. 이 점들이 "기록이 찍힌 날"입니다.
+    final dot = Paint()..color = color;
+    for (final x in [sw * 0.30, sw * 0.50, sw * 0.70]) {
+      canvas.drawCircle(Offset(x, sh * 0.655), w * 0.62, dot);
+    }
   }
 
-  /// 압정. 머리와 침.
-  void _pin(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final head = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(w / 2, h * 0.36),
-        width: w * 0.54,
-        height: h * 0.30,
-      ),
-      const Radius.circular(5),
+  /// 관람 회원증. 왼쪽에 얼굴, 오른쪽에 기재란 두 줄.
+  void _member(Canvas canvas, Size size, double w) {
+    final sw = size.width;
+    final sh = size.height;
+
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTRB(sw * 0.07, sh * 0.24, sw * 0.93, sh * 0.80),
+      Radius.circular(sw * 0.05),
     );
 
-    if (filled) canvas.drawRRect(head, _wash);
-    canvas.drawRRect(head, _stroke);
+    if (filled) canvas.drawRRect(body, _wash);
+    canvas.drawRRect(body, _stroke(w));
 
-    canvas.drawLine(Offset(w / 2, h * 0.52), Offset(w / 2, h * 0.87), _stroke);
-
+    // 증명사진: 머리 + 어깨.
+    canvas.drawCircle(Offset(sw * 0.31, sh * 0.43), sw * 0.075, _stroke(w * 0.8));
     canvas.drawArc(
       Rect.fromCenter(
-        center: Offset(w / 2, h * 0.22),
-        width: w * 0.34,
-        height: h * 0.22,
+        center: Offset(sw * 0.31, sh * 0.685),
+        width: sw * 0.28,
+        height: sh * 0.26,
       ),
-      math.pi,
-      math.pi,
+      3.14159,
+      3.14159,
       false,
-      _stroke..strokeWidth = 1.2,
+      _stroke(w * 0.8),
+    );
+
+    // 기재란.
+    canvas.drawLine(
+      Offset(sw * 0.52, sh * 0.44),
+      Offset(sw * 0.84, sh * 0.44),
+      _stroke(w * 0.75),
+    );
+    canvas.drawLine(
+      Offset(sw * 0.52, sh * 0.58),
+      Offset(sw * 0.76, sh * 0.58),
+      _stroke(w * 0.75),
     );
   }
 

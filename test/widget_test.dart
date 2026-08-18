@@ -15,7 +15,7 @@ void main() {
     await tester.pumpWidget(const ArticketApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('나의 티켓북'), findsOneWidget);
+    expect(find.text('티켓 서랍'), findsOneWidget);
 
     // 목업 폴더 개수만큼 서류철이 렌더링됩니다.
     final folderCount = TicketStore.instance.folders.length;
@@ -58,6 +58,27 @@ void main() {
 
     // 다음 테스트에 영향을 주지 않도록 되돌립니다.
     store.removeFolder(store.folders.last.id);
+  });
+
+  testWidgets('아래 탭바로 달력·내 기록으로 건너간다', (WidgetTester tester) async {
+    await tester.pumpWidget(const ArticketApp());
+    await tester.pumpAndSettle();
+
+    // 달력.
+    await tester.tap(find.text('달력'));
+    await tester.pumpAndSettle();
+    expect(find.text('CALENDAR'), findsOneWidget);
+
+    // 내 기록. 예전에 빈 화면이던 자리에 회원증이 떠야 합니다.
+    await tester.tap(find.text('내 기록'));
+    await tester.pumpAndSettle();
+    expect(find.text('MY RECORD'), findsOneWidget);
+    expect(find.text('MEMBER'), findsOneWidget);
+
+    // 서랍으로 복귀.
+    await tester.tap(find.text('서랍'));
+    await tester.pumpAndSettle();
+    expect(find.text('티켓 서랍'), findsOneWidget);
   });
 
   testWidgets('저장소가 폴더별 티켓을 걸러낸다', (WidgetTester tester) async {

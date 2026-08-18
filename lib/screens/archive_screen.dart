@@ -8,13 +8,9 @@ import '../theme/app_text.dart';
 import '../widgets/folder_open_route.dart';
 import '../widgets/folder_texture.dart';
 import '../widgets/index_tab.dart';
-import '../widgets/nav_icons.dart';
 import '../widgets/paper.dart';
-import '../widgets/paper_toast.dart';
-import 'calendar_screen.dart';
 import 'folder_screen.dart';
 import 'folder_workbench.dart';
-import 'profile_screen.dart';
 
 /// 앱의 첫 화면. 가로 서류철이 겹쳐 쌓인 파일 드로어.
 ///
@@ -60,6 +56,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                       child: _Header(
                         folderCount: folders.length,
                         ticketCount: store.tickets.length,
+                        lastFiled: _lastFiled(),
                         onAdd: _newFolder,
                       ),
                     ),
@@ -124,11 +121,17 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
           const WallGrain(opacity: 0.045),
         ],
       ),
-      bottomNavigationBar: const _BottomBar(),
     );
   }
 
   GlobalKey _keyOf(String id) => _cardKeys.putIfAbsent(id, GlobalKey.new);
+
+  /// 가장 최근에 철해둔 날. 서랍 라벨에 찍습니다.
+  DateTime? _lastFiled() {
+    final ts = store.tickets;
+    if (ts.isEmpty) return null;
+    return ts.map((t) => t.visitedAt).reduce((a, b) => a.isAfter(b) ? a : b);
+  }
 
   // ── 열기 (표지가 젖혀지는 전환) ─────────────────────
 
@@ -233,10 +236,10 @@ class _EmptyDrawer extends StatelessWidget {
             color: AppColors.line,
           ),
           const SizedBox(height: 16),
-          Text('빈 서랍입니다',
+          Text('서랍이 비었네요',
               style: AppText.display(size: 20, color: AppColors.inkSoft)),
           const SizedBox(height: 6),
-          Text('오른쪽 위에서 서류철을 한 장 매세요',
+          Text('오른쪽 위 아이콘으로 서류철 만들기',
               style: AppText.ui(size: 12, color: AppColors.pulp)),
         ],
       ),
@@ -248,6 +251,7 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.folderCount,
     required this.ticketCount,
+    required this.lastFiled,
     required this.onAdd,
   });
 
@@ -256,6 +260,9 @@ class _Header extends StatelessWidget {
 
   /// 그 안에 든 티켓 수.
   final int ticketCount;
+
+  /// 마지막으로 철해둔 관람일. 없으면 라벨을 비웁니다.
+  final DateTime? lastFiled;
 
   final VoidCallback onAdd;
 
@@ -287,7 +294,7 @@ class _Header extends StatelessWidget {
             children: [
               Expanded(
                 child: DebossedText(
-                  '나의 티켓북',
+                  '티켓 서랍',
                   depth: 0.35,
                   style: AppText.display(size: 36, color: AppColors.ink),
                 ),
@@ -307,162 +314,39 @@ class _Header extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(height: 1, color: AppColors.line),
-                const SizedBox(height: 8),
-                Text('탭하면 열리고, ⋯ 를 누르면 책상 위로 꺼내 고칩니다',
-                    style: AppText.ui(size: 12, color: AppColors.inkSoft)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 아래 탭바.
-///
-/// 머티리얼 기본 탭바 대신 **서류철 인덱스 탭**을 눕혀놓은 모양입니다.
-/// 고른 항목 뒤로 종이 탭이 한 장 솟아오르고, 위에는 황동 헤어라인이 지납니다.
-/// 마켓은 아직 붙일 것이 없어 이번에 뺐습니다.
-class _BottomBar extends StatefulWidget {
-  const _BottomBar();
-
-  @override
-  State<_BottomBar> createState() => _BottomBarState();
-}
-
-class _BottomBarState extends State<_BottomBar> {
-  int _active = 0;
-
-  static const _items = [
-    (NavSymbol.stamp, '아카이브'),
-    (NavSymbol.dateStamp, '캘린더'),
-    (NavSymbol.pin, '내 정보'),
-  ];
-
-  Future<void> _go(int i) async {
-    if (i == 0) return;
-    setState(() => _active = i);
-
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-        i == 1 ? const CalendarScreen() : const ProfileScreen(),
-      ),
-    );
-    // 돌아오면 다시 아카이브가 활성입니다.
-    if (mounted) setState(() => _active = 0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(color: AppColors.stock),
-      child: Stack(
-        children: [
-          const WallGrain(opacity: 0.05, seed: 12),
-
-          // 위쪽 두 줄. 얇은 잉크선 + 그 아래 황동 헤어라인.
-          const Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: Column(
-              children: [
-                Divider(height: 1, thickness: 1, color: AppColors.line),
-                SizedBox(
-                  height: 1,
-                  child: ColoredBox(color: Color(0x338C7134)),
-                ),
-              ],
-            ),
-          ),
-
-          SafeArea(
-            top: false,
-            child: SizedBox(
-              height: 62,
-              child: Row(
-                children: [
-                  for (var i = 0; i < _items.length; i++)
+                const SizedBox(height: 9),
+                // 설명문 대신 서랍 앞에 붙은 라벨과 손으로 적은 쪽지.
+                Row(
+                  children: [
+                    if (lastFiled != null) ...[
+                      Text(
+                        'LAST FILED',
+                        style: AppText.data(
+                            size: 8.5, spacing: 1.6, color: AppColors.pulp),
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        '${lastFiled!.year}.'
+                            '${lastFiled!.month.toString().padLeft(2, '0')}.'
+                            '${lastFiled!.day.toString().padLeft(2, '0')}',
+                        style: AppText.data(size: 9.5, color: AppColors.foil),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
-                      child: _Tab(
-                        symbol: _items[i].$1,
-                        label: _items[i].$2,
-                        active: _active == i,
-                        onTap: () => _go(i),
+                      child: Text(
+                        '눌러서 펼치기 · ⋯ 누르면 고치기',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.hand(size: 17, color: AppColors.inkSoft),
                       ),
                     ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 탭 한 칸. 고르면 뒤로 종이 인덱스 탭이 솟습니다.
-class _Tab extends StatelessWidget {
-  const _Tab({
-    required this.symbol,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final NavSymbol symbol;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? AppColors.oxblood : AppColors.inkSoft;
-
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-          decoration: BoxDecoration(
-            color: active
-                ? AppColors.stockLight
-                : AppColors.stockLight.withValues(alpha: 0),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
-            border: Border(
-              top: BorderSide(
-                color: active ? AppColors.foil : Colors.transparent,
-                width: 1.4,
-              ),
-              left: BorderSide(
-                color: active ? AppColors.line : Colors.transparent,
-              ),
-              right: BorderSide(
-                color: active ? AppColors.line : Colors.transparent,
-              ),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              NavIcon(symbol: symbol, color: color, size: 20, filled: active),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: AppText.ui(
-                  size: 10,
-                  weight: active ? FontWeight.w600 : FontWeight.w400,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

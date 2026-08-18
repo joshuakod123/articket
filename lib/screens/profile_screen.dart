@@ -1,17 +1,42 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/ticket_store.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../theme/folder_style.dart';
 import '../widgets/folder_texture.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
+import '../widgets/scrapbook.dart' show WashiTape;
+import '../widgets/ticket_canvas.dart';
+import 'ticket_detail_screen.dart';
 
-/// 내 정보.
+/// 관람자 이름. 앱을 켜 둔 동안 유지됩니다.
 ///
-/// 프로필 사진과 설정 목록 대신, **관람 이력을 요약한 대장(臺帳) 한 장**으로
-/// 만들었습니다. 이 앱에서 사용자를 설명하는 건 계정이 아니라 본 것들입니다.
+/// Phase 1 이후 로컬 DB(Hive/Isar)로 옮길 때 이 노티파이어만 갈아 끼우면
+/// 화면 코드는 그대로 둘 수 있습니다.
+final ValueNotifier<String> viewerName = ValueNotifier<String>('이름 없는 관람자');
+
+/// 내 기록.
+///
+/// ## 이 화면이 왜 하얗게 비어 있었나
+///
+/// 예전 회원증 카드가 `Row(crossAxisAlignment: CrossAxisAlignment.stretch)` 였습니다.
+/// stretch는 **바깥에서 받은 높이를 그대로 자식에게 강제로 물립니다.** 그런데 이
+/// Row는 `ListView` 안에 있었고, 세로 스크롤 뷰가 자식에게 주는 높이는 무한대입니다.
+/// 결국 카드가 "높이 = 무한"으로 잡히면서 그 아래 내용이 전부 화면 밖으로 밀려
+/// 앱바만 남은 빈 화면이 됐습니다. (디버그 빌드였다면 빨간 오버플로 대신
+/// `BoxConstraints forces an infinite height` 예외가 떴을 자리입니다)
+///
+/// 고치는 방법은 둘 중 하나입니다.
+/// 1. `IntrinsicHeight`로 감싸 자식들의 자연 높이를 먼저 재게 하거나,
+/// 2. 애초에 높이가 정해진 상자 안에 넣거나.
+///
+/// 여기서는 2번을 택했습니다. 회원증은 실물처럼 **비율이 정해진 카드**라서
+/// `AspectRatio`로 높이를 못 박는 편이 더 정확합니다.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -38,6 +63,17 @@ class ProfileScreen extends StatelessWidget {
               : rated.map((t) => t.rating).reduce((a, b) => a + b) /
               rated.length;
 
+          // 가장 오래된 기록의 해 = 관람을 시작한 해.
+          final since = tickets.isEmpty
+              ? now.year
+              : tickets
+              .map((t) => t.visitedAt.year)
+              .reduce((a, b) => a < b ? a : b);
+
+          // 최근에 본 것 여섯.
+          final recent = tickets.toList()
+            ..sort((a, b) => b.visitedAt.compareTo(a.visitedAt));
+
           // 장르별 집계.
           final genres = <String, int>{};
           for (final t in tickets) {
@@ -58,78 +94,144 @@ class ProfileScreen extends StatelessWidget {
             children: [
               const WallGrain(opacity: 0.05, seed: 73),
               ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 44),
                 children: [
-                  _Ledger(
-                    tickets: tickets.length,
-                    folders: store.folders.length,
-                    thisYear: thisYear,
-                    average: avg,
+                  // ── 회원증 ─────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _MemberPlate(
+                      total: tickets.length,
+                      since: since,
+                    ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 22),
+
+                  // ── 숫자 넉 줄 ─────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _StatStrip(
+                      cells: [
+                        ('티켓', '${tickets.length}'),
+                        ('서류철', '${store.folders.length}'),
+                        ('올해', '$thisYear'),
+                        ('평균', avg == 0 ? '—' : avg.toStringAsFixed(1)),
+                      ],
+                    ),
+                  ),
+
+                  if (recent.isNotEmpty) ...[
+                    const SizedBox(height: 34),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: _SectionHead('최근에 본 것', 'LATELY'),
+                    ),
+                    const SizedBox(height: 16),
+                    _PinBoard(tickets: recent.take(6).toList()),
+                  ],
 
                   if (genreList.isNotEmpty) ...[
-                    const _SectionHead('무엇을 봤나', 'BY GENRE'),
+                    const SizedBox(height: 34),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: _SectionHead('무엇을 봤나', 'BY GENRE'),
+                    ),
                     const SizedBox(height: 14),
-                    for (final e in genreList)
-                      _Bar(
-                        label: e.key,
-                        value: e.value,
-                        total: tickets.length,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        children: [
+                          for (final e in genreList)
+                            _Bar(
+                              label: e.key,
+                              value: e.value,
+                              total: tickets.length,
+                            ),
+                        ],
                       ),
-                    const SizedBox(height: 30),
+                    ),
                   ],
 
                   if (topVenues.isNotEmpty) ...[
-                    const _SectionHead('어디에 자주 갔나', 'BY VENUE'),
-                    const SizedBox(height: 10),
-                    for (final e in topVenues.take(5))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                e.key,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppText.ui(
-                                    size: 13.5, color: AppColors.ink),
+                    const SizedBox(height: 30),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: _SectionHead('어디에 자주 갔나', 'BY VENUE'),
+                    ),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        children: [
+                          for (final e in topVenues.take(5))
+                            Padding(
+                              padding:
+                              const EdgeInsets.symmetric(vertical: 9),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 5,
+                                    height: 5,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: AppColors.foil,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      e.key,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppText.ui(
+                                          size: 13.5, color: AppColors.ink),
+                                    ),
+                                  ),
+                                  Text('${e.value}회',
+                                      style: AppText.data(
+                                          size: 11, color: AppColors.foil)),
+                                ],
                               ),
                             ),
-                            Text('${e.value}회',
-                                style: AppText.data(
-                                    size: 11, color: AppColors.foil)),
-                          ],
-                        ),
+                        ],
                       ),
-                    const SizedBox(height: 30),
+                    ),
                   ],
 
-                  const _SectionHead('보관함', 'STORAGE'),
-                  const SizedBox(height: 10),
-                  _Row(
-                    icon: Icons.cloud_off_outlined,
-                    title: '기기에만 저장 중',
-                    subtitle: '앱을 지우면 기록도 함께 사라집니다',
-                    onTap: () => PaperToast.show(
-                      context,
-                      '클라우드 백업은 Phase 2에서 붙습니다',
-                      detail: 'ROADMAP · PHASE 2',
-                    ),
+                  const SizedBox(height: 30),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: _SectionHead('보관함', 'STORAGE'),
                   ),
-                  _Row(
-                    icon: Icons.ios_share,
-                    title: '기록 내보내기',
-                    subtitle: '티켓 전체를 파일 한 장으로',
-                    onTap: () => PaperToast.show(
-                      context,
-                      '내보내기는 Phase 1 후반에 붙습니다',
-                      detail: 'ROADMAP · PHASE 1',
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      children: [
+                        _Row(
+                          icon: Icons.cloud_off_outlined,
+                          title: '기기에만 저장 중',
+                          subtitle: '앱을 지우면 기록도 같이 사라져요',
+                          onTap: () => PaperToast.show(
+                            context,
+                            '클라우드 백업은 Phase 2에서 붙습니다',
+                            detail: 'ROADMAP · PHASE 2',
+                          ),
+                        ),
+                        _Row(
+                          icon: Icons.ios_share,
+                          title: '기록 내보내기',
+                          subtitle: '티켓 전체를 파일 한 장으로',
+                          onTap: () => PaperToast.show(
+                            context,
+                            '내보내기는 Phase 1 후반에 붙습니다',
+                            detail: 'ROADMAP · PHASE 1',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
-                  const SizedBox(height: 34),
+                  const SizedBox(height: 36),
                   Center(
                     child: Text(
                       'ARTICKET',
@@ -151,142 +253,213 @@ class ProfileScreen extends StatelessWidget {
 
 /// 관람 회원증.
 ///
-/// 그냥 숫자를 나열하면 대시보드가 됩니다. 여기서는 **발급받은 회원증 한 장**으로
-/// 만들었습니다. 왼쪽에 절취선, 오른쪽 위에 고무 도장, 아래에 항목 셋.
-class _Ledger extends StatelessWidget {
-  const _Ledger({
-    required this.tickets,
-    required this.folders,
-    required this.thisYear,
-    required this.average,
-  });
+/// 리넨 클로스로 싼 짙은 옥스블러드 카드. 오른쪽에는 도록 표지처럼 **연도를
+/// 세로로 눕혀** 크게 깔고, 왼쪽에 이름과 발급 정보를 얹었습니다.
+/// 이름을 누르면 그 자리에서 고칠 수 있습니다.
+class _MemberPlate extends StatelessWidget {
+  const _MemberPlate({required this.total, required this.since});
 
-  final int tickets;
-  final int folders;
-  final int thisYear;
-  final double average;
+  final int total;
+  final int since;
 
   @override
   Widget build(BuildContext context) {
+    final serial =
+        'AK-${DateTime.now().year}-${total.toString().padLeft(4, '0')}';
+
     return DecoratedBox(
-      decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.7)),
-      child: PaperSurface(
-        color: AppColors.stockLight,
-        grain: 0.06,
-        fiber: 0.8,
-        seed: 5,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 왼쪽 절취 조각. 회원증 번호가 세로로 찍혀 있습니다.
-            SizedBox(
-              width: 34,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ColoredBox(
-                      color: AppColors.oxblood.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  Center(
-                    child: RotatedBox(
-                      quarterTurns: 3,
+      decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
+      // 비율을 못 박습니다. ListView 안에서 높이가 무한으로 새지 않는 유일한 방법.
+      child: AspectRatio(
+        aspectRatio: 1.62, // 실제 신용카드 비율.
+        child: FolderSurface(
+          color: AppColors.oxblood,
+          texture: FolderTexture.linen,
+          seed: 91,
+          wear: 0.7,
+          child: Stack(
+            children: [
+              // 배경으로 깔리는 커다란 세로 연도.
+              Positioned(
+                right: -6,
+                top: -10,
+                bottom: -10,
+                child: IgnorePointer(
+                  child: RotatedBox(
+                    quarterTurns: 1,
+                    child: Center(
                       child: Text(
-                        'MEMBER',
-                        style: AppText.data(
-                            size: 9,
-                            spacing: 3.0,
-                            weight: FontWeight.w700,
-                            color: AppColors.oxblood.withValues(alpha: 0.7)),
+                        '$since',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.visible,
+                        style: AppText.plate(
+                          size: 78,
+                          color: Colors.white.withValues(alpha: 0.10),
+                        ),
                       ),
                     ),
                   ),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: CustomPaint(
-                      size: const Size(1, double.infinity),
-                      painter: _DashPainter(),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Text('LEDGER',
-                            style: AppText.eyebrow(color: AppColors.inkSoft)),
+                        Text('ARTICKET',
+                            style: AppText.wordmark(
+                                size: 11,
+                                spacing: 4.5,
+                                color: Colors.white
+                                    .withValues(alpha: 0.85))),
                         const Spacer(),
-                        Transform.rotate(
-                          angle: -0.06,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                  color: AppColors.oxblood
-                                      .withValues(alpha: 0.65),
-                                  width: 1.2),
-                            ),
-                            child: Text('${DateTime.now().year}',
-                                style: AppText.data(
-                                    size: 9,
-                                    spacing: 2.0,
-                                    weight: FontWeight.w700,
-                                    color: AppColors.oxblood
-                                        .withValues(alpha: 0.85))),
-                          ),
-                        ),
+                        Text('MEMBER',
+                            style: AppText.eyebrow(
+                                size: 8,
+                                color:
+                                Colors.white.withValues(alpha: 0.55))),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    DebossedText(
-                      '지금까지 $tickets장',
-                      depth: 0.35,
-                      style: AppText.display(size: 25, color: AppColors.ink),
+                    Container(
+                        height: 1,
+                        color: Colors.white.withValues(alpha: 0.22)),
+
+                    const Spacer(),
+
+                    // 이름.
+                    GestureDetector(
+                      onTap: () => _rename(context),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: ValueListenableBuilder<String>(
+                              valueListenable: viewerName,
+                              builder: (context, name, _) => Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppText.display(
+                                    size: 26, color: AppColors.stockLight),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(Icons.edit_outlined,
+                              size: 14,
+                              color: Colors.white.withValues(alpha: 0.45)),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    Container(height: 1, color: AppColors.line),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$since년부터 $total장',
+                      style: AppText.ui(
+                          size: 11.5,
+                          color: Colors.white.withValues(alpha: 0.6)),
+                    ),
+
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 1,
+                      child: CustomPaint(painter: _DashPainter()),
+                    ),
+                    const SizedBox(height: 9),
                     Row(
                       children: [
-                        _Cell(label: '서류철', value: '$folders'),
-                        _Cell(label: '올해', value: '$thisYear'),
-                        _Cell(
-                          label: '평균 별점',
-                          value:
-                          average == 0 ? '—' : average.toStringAsFixed(1),
-                        ),
+                        Text(serial,
+                            style: AppText.data(
+                                size: 9.5,
+                                spacing: 1.4,
+                                color: Colors.white
+                                    .withValues(alpha: 0.55))),
+                        const Spacer(),
+                        Text('SEOUL',
+                            style: AppText.eyebrow(
+                                size: 8,
+                                color:
+                                Colors.white.withValues(alpha: 0.4))),
                       ],
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Future<void> _rename(BuildContext context) async {
+    final controller = TextEditingController(text: viewerName.value);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.stockLight,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(),
+        title: Text('뭐라고 부를까요',
+            style: AppText.display(size: 18, color: AppColors.ink)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 14,
+          textInputAction: TextInputAction.done,
+          style: AppText.ui(size: 15, color: AppColors.ink),
+          cursorColor: AppColors.oxblood,
+          decoration: InputDecoration(
+            counterText: '',
+            hintText: '이름 없는 관람자',
+            hintStyle: AppText.ui(size: 15, color: AppColors.pulp),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.line),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.oxblood, width: 1.4),
+            ),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('그대로',
+                style: AppText.ui(size: 13, color: AppColors.inkSoft)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text('바꾸기',
+                style: AppText.ui(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: AppColors.oxblood)),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    if (result != null && result.isNotEmpty) viewerName.value = result;
+  }
 }
 
-/// 회원증의 세로 절취선.
+/// 회원증의 절취선.
 class _DashPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
-      ..color = AppColors.pulp
+      ..color = Colors.white.withValues(alpha: 0.30)
       ..strokeWidth = 1.1
       ..strokeCap = StrokeCap.round;
-    for (double y = 8; y < size.height - 8; y += 8) {
-      canvas.drawLine(Offset(0, y), Offset(0, y + 3.5), p);
+    for (double x = 0; x < size.width; x += 7) {
+      canvas.drawLine(Offset(x, 0.5), Offset(x + 3.2, 0.5), p);
     }
   }
 
@@ -294,25 +467,134 @@ class _DashPainter extends CustomPainter {
   bool shouldRepaint(_DashPainter old) => false;
 }
 
-class _Cell extends StatelessWidget {
-  const _Cell({required this.label, required this.value});
+/// 숫자 넉 칸. 높이를 고정해 두어 어떤 스크롤 안에서도 안전합니다.
+class _StatStrip extends StatelessWidget {
+  const _StatStrip({required this.cells});
 
-  final String label;
-  final String value;
+  final List<(String, String)> cells;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: AppText.eyebrow(
-                  color: AppColors.inkSoft.withValues(alpha: 0.7))),
-          const SizedBox(height: 6),
-          Text(value,
-              style: AppText.plate(size: 24, color: AppColors.foil)),
-        ],
+    return SizedBox(
+      height: 74,
+      child: PaperSurface(
+        color: AppColors.stock,
+        grain: 0.05,
+        fiber: 0.6,
+        seed: 33,
+        child: DecoratedBox(
+          decoration: BoxDecoration(border: Border.all(color: AppColors.line)),
+          child: Row(
+            children: [
+              for (var i = 0; i < cells.length; i++) ...[
+                if (i > 0)
+                  Container(width: 1, height: 40, color: AppColors.line),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(cells[i].$2,
+                          maxLines: 1,
+                          style: AppText.plate(
+                              size: 24, color: AppColors.foil)),
+                      const SizedBox(height: 3),
+                      Text(cells[i].$1,
+                          maxLines: 1,
+                          style: AppText.ui(
+                              size: 10.5,
+                              height: 1.0,
+                              color: AppColors.inkSoft)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 최근 티켓을 핀으로 꽂아 둔 판.
+///
+/// 목록으로 세우면 그냥 리스트가 됩니다. 살짝씩 다른 각도로 눕히고 테이프를
+/// 한 조각씩 붙여, 벽에 꽂아둔 것처럼 보이게 했습니다.
+class _PinBoard extends StatelessWidget {
+  const _PinBoard({required this.tickets});
+
+  final List<Ticket> tickets;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 206,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+        itemCount: tickets.length,
+        itemBuilder: (context, i) {
+          final t = tickets[i];
+          // 같은 자리에 늘 같은 각도가 나오도록 인덱스로 고정합니다.
+          final tilt = (math.sin(i * 2.7) * 0.035);
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 18),
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => TicketDetailScreen(ticketId: t.id),
+                ),
+              ),
+              child: Transform.rotate(
+                angle: tilt,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.topCenter,
+                      children: [
+                        SizedBox(
+                          height: 150,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                                boxShadow: paperShadow(depth: 0.45)),
+                            child: AspectRatio(
+                              aspectRatio: t.frame.aspect,
+                              child: TicketCanvas(
+                                ticket: t,
+                                compact: true,
+                                showLayers: false,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: -7,
+                          child: WashiTape(
+                            width: 44,
+                            height: 15,
+                            color: AppColors.foil.withValues(alpha: 0.42),
+                            angle: -0.06 + tilt * 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 9),
+                    Text(
+                      t.dateLabel,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: AppText.hand(size: 16, color: AppColors.inkSoft),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -370,27 +652,20 @@ class _Bar extends StatelessWidget {
                     style: AppText.ui(size: 12.5, color: AppColors.ink)),
               ),
               Text('$value',
-                  style:
-                  AppText.data(size: 10.5, color: AppColors.inkSoft)),
+                  style: AppText.data(size: 10.5, color: AppColors.inkSoft)),
             ],
           ),
           const SizedBox(height: 5),
-          ClipRect(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              widthFactor: 1,
-              child: LayoutBuilder(
-                builder: (context, c) => Stack(
-                  children: [
-                    Container(height: 6, color: AppColors.line),
-                    Container(
-                      height: 6,
-                      width: c.maxWidth * ratio,
-                      color: AppColors.foil.withValues(alpha: 0.8),
-                    ),
-                  ],
+          LayoutBuilder(
+            builder: (context, c) => Stack(
+              children: [
+                Container(height: 6, color: AppColors.line),
+                Container(
+                  height: 6,
+                  width: c.maxWidth * ratio,
+                  color: AppColors.foil.withValues(alpha: 0.85),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -432,8 +707,7 @@ class _Row extends StatelessWidget {
                   Text(subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                      AppText.ui(size: 11, color: AppColors.inkSoft)),
+                      style: AppText.ui(size: 11, color: AppColors.inkSoft)),
                 ],
               ),
             ),

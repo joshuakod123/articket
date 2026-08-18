@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'screens/archive_screen.dart';
+import 'screens/root_shell.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -19,7 +19,7 @@ class ArticketApp extends StatelessWidget {
       title: 'Articket',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),
-      home: const ArchiveScreen(),
+      home: const RootShell(),
     );
   }
 }
