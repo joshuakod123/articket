@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../theme/folder_style.dart';
+import 'folder_texture.dart';
 import 'paper.dart';
 import 'scrapbook.dart' show WashiTape;
 import 'ticket_card.dart';
@@ -16,13 +18,17 @@ class FolderMetrics {
   static const tabHeight = 34.0;
 
   /// 카드 한 장의 전체 높이.
-  static const cardHeight = 178.0;
+  static const cardHeight = 188.0;
 
   /// 다음 서류철이 이만큼 아래에서 시작해 앞 서류철 몸통을 덮습니다.
-  static const step = 150.0;
+  /// `cardHeight - step`(30pt)만큼이 마지막 장에서만 더 보입니다.
+  static const step = 158.0;
 
   /// 포켓(앞판) 윗변의 y 좌표. 티켓은 이 선 뒤로 들어갑니다.
-  static const pocketTop = 116.0;
+  static const pocketTop = 114.0;
+
+  /// 겹쳐 있을 때 실제로 눈에 보이는 포켓 띠의 높이.
+  static const pocketBand = step - pocketTop; // 44
 }
 
 /// 가로 서류철 실루엣. 위쪽 한 자리에 사다리꼴 인덱스 탭이 돌출됩니다.
@@ -74,7 +80,7 @@ class FolderShape extends CustomClipper<Path> {
           old.tabHeight != tabHeight;
 }
 
-/// 서류철 앞판(포켓). 윗변 가운데 오른쪽에 엄지 홈이 파여 있습니다.
+/// 서류철 앞판(포켓). 윗변 오른쪽에 엄지 홈이 파여 있습니다.
 class _PocketClipper extends CustomClipper<Path> {
   static const _notchR = 26.0;
 
@@ -99,28 +105,76 @@ class _PocketClipper extends CustomClipper<Path> {
   bool shouldReclip(_PocketClipper old) => false;
 }
 
-/// 다이모 라벨 테이프. 엠보싱된 검은 띠에 흰 대문자가 눌려 찍힙니다.
-class DymoLabel extends StatelessWidget {
-  const DymoLabel({super.key, required this.text, this.fontSize = 10});
+// ─────────────────────────────────────────────────────────────
+// 탭 라벨
+// ─────────────────────────────────────────────────────────────
+
+/// 글자 폭을 재서 탭 너비를 잡습니다.
+double _measure(String text, TextStyle style) {
+  final tp = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+  return tp.width;
+}
+
+/// 인덱스 탭 위에 얹히는 이름표.
+///
+/// [FolderFont.dymo]는 검은 라벨 테이프 위에 눌러 찍고,
+/// 나머지 서체는 표지에 **직접 압인**됩니다. 같은 이름이라도
+/// "라벨을 붙였나 / 표지에 새겼나"가 달라 보이는 게 핵심입니다.
+class FolderTabLabel extends StatelessWidget {
+  const FolderTabLabel({
+    super.key,
+    required this.text,
+    required this.font,
+    required this.onColor,
+    this.fontSize = 11,
+  });
 
   final String text;
+  final FolderFont font;
+
+  /// 표지 위에 직접 찍을 때 쓰는 잉크색.
+  final Color onColor;
   final double fontSize;
 
-  /// 이 라벨이 차지할 폭. 탭 너비를 글자 길이에 맞추는 데 씁니다.
-  static double widthOf(String text, {double fontSize = 10}) {
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: AppText.dymo(size: fontSize)),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
-    return tp.width + 24;
+  static const tapeHeight = 22.0;
+
+  /// 이 이름표가 차지할 폭.
+  static double widthOf(String text, FolderFont font, {double fontSize = 11}) {
+    final w = _measure(text, font.style(size: fontSize));
+    return w + (font.onTape ? 26 : 18);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (font.onTape) return _tape();
+
+    // 표지에 직접 새긴 이름. 아래에 황동 헤어라인을 깔아 캡션 플레이트처럼.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DebossedText(
+          text,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          style: font.style(size: fontSize, color: onColor),
+        ),
+        const SizedBox(height: 3),
+        Container(
+          height: 1,
+          color: AppColors.foil.withValues(alpha: 0.55),
+        ),
+      ],
+    );
+  }
+
+  Widget _tape() {
     return Container(
-      height: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: tapeHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 13),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.dymo,
@@ -141,7 +195,7 @@ class DymoLabel extends StatelessWidget {
             top: 0,
             left: 0,
             right: 0,
-            height: 8,
+            height: 9,
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -149,7 +203,7 @@ class DymoLabel extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.white.withValues(alpha: 0.14),
+                      Colors.white.withValues(alpha: 0.15),
                       Colors.white.withValues(alpha: 0.0),
                     ],
                   ),
@@ -161,12 +215,15 @@ class DymoLabel extends StatelessWidget {
             text,
             maxLines: 1,
             softWrap: false,
-            style: AppText.dymo(size: fontSize, color: AppColors.stockLight)
+            overflow: TextOverflow.clip,
+            style: font.style(size: fontSize, color: AppColors.stockLight)
                 .copyWith(
-              shadows: [
+              shadows: const [
                 // 글자가 눌려 들어간 자국.
-                const Shadow(
-                    color: Colors.black54, offset: Offset(0, 1), blurRadius: 1),
+                Shadow(
+                    color: Colors.black54,
+                    offset: Offset(0, 1),
+                    blurRadius: 1),
               ],
             ),
           ),
@@ -176,10 +233,33 @@ class DymoLabel extends StatelessWidget {
   }
 }
 
+/// 이전 이름 호환용. 새 코드는 [FolderTabLabel]을 쓰세요.
+class DymoLabel extends StatelessWidget {
+  const DymoLabel({super.key, required this.text, this.fontSize = 11});
+
+  final String text;
+  final double fontSize;
+
+  static double widthOf(String text, {double fontSize = 11}) =>
+      FolderTabLabel.widthOf(text, FolderFont.dymo, fontSize: fontSize);
+
+  @override
+  Widget build(BuildContext context) => FolderTabLabel(
+    text: text,
+    font: FolderFont.dymo,
+    onColor: AppColors.ink,
+    fontSize: fontSize,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 서류철 카드
+// ─────────────────────────────────────────────────────────────
+
 /// 서랍에 겹쳐 꽂힌 가로 서류철 한 장.
 ///
-/// 탭에는 다이모 라벨, 몸통에는 실제 티켓의 머리가 포켓 뒤로 삐져나옵니다.
-/// 아래 서류철이 몸통 대부분을 덮는 걸 전제로 위쪽 150pt 안에 정보를 넣습니다.
+/// 탭에는 이름표, 몸통에는 실제 티켓의 머리가 포켓 뒤로 삐져나오고,
+/// 포켓 띠에는 서류철 이름과 정리 번호가 찍힙니다.
 class FolderCard extends StatelessWidget {
   const FolderCard({
     super.key,
@@ -217,97 +297,94 @@ class FolderCard extends StatelessWidget {
           ? AppColors.stockLight
           : AppColors.ink;
 
+  /// 포켓(앞판)은 몸통보다 한 톤 눌러 판이 갈라져 보이게 합니다.
   Color get _pocketColor {
     final hsl = HSLColor.fromColor(folder.color);
-    return hsl.withLightness(clampDouble(hsl.lightness * 0.88, 0, 1)).toColor();
+    return hsl.withLightness(clampDouble(hsl.lightness * 0.87, 0, 1)).toColor();
   }
 
-  /// 탭에 찍을 짧은 코드. 말줄임 없이 다 보이도록 길이를 줄여 씁니다.
+  /// 탭에 찍을 이름. 서체에 따라 대문자로 눌러 찍습니다.
   String get _code {
-    var s = folder.label.replaceAll('/', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    var s = folder.label
+        .replaceAll('/', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (s.isEmpty) s = 'FILE $fileNo';
-    return s.toUpperCase();
+    return folder.font.upperCase ? s.toUpperCase() : s;
   }
+
+  String get _fileNoLabel => 'FILE_${fileNo.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
     const tabHeight = FolderMetrics.tabHeight;
+    final font = folder.font;
 
     return LayoutBuilder(
       builder: (context, c) {
         // 글자 길이에 맞춰 탭 너비를 잡습니다. 잘리지 않는 게 우선입니다.
-        final labelWidth = DymoLabel.widthOf(_code);
+        final labelWidth = FolderTabLabel.widthOf(_code, font);
         final tabWidth = clampDouble(
-            labelWidth + 32, 104, clampDouble(c.maxWidth - 24, 104, 400));
+            labelWidth + 30, 104, clampDouble(c.maxWidth - 24, 104, 420));
 
         // 남는 폭을 슬롯 수로 나눠 탭 위치를 어긋나게 둡니다.
-        final travel = clampDouble(c.maxWidth - 24 - tabWidth, 0, double.infinity);
-        // 0이 아니라 0.0이어야 전체 식이 double로 잡힙니다(0이면 num이 되어 컴파일 에러).
+        final travel =
+        clampDouble(c.maxWidth - 24 - tabWidth, 0, double.infinity);
+        // 0이 아니라 0.0이어야 전체 식이 double로 잡힙니다.
         final tabStart =
             12 + (totalSlots <= 1 ? 0.0 : travel * tabSlot / (totalSlots - 1));
 
         return Semantics(
           button: true,
-          label: '${folder.subtitle}, 티켓 $count장',
+          label: '${folder.subtitle}, 티켓 $count장. 길게 누르면 작업대가 열립니다',
           child: GestureDetector(
             onTap: onTap,
             onLongPress: onLongPress,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 240),
+              duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
-              transform: Matrix4.translationValues(0, lifted ? -10 : 0, 0),
+              transform: Matrix4.translationValues(0, lifted ? -12 : 0, 0),
               child: PhysicalShape(
                 clipper: FolderShape(tabStart: tabStart, tabWidth: tabWidth),
                 color: folder.color,
                 shadowColor: const Color(0xFF2A2016),
-                elevation: lifted ? 16 : 9,
+                elevation: lifted ? 18 : 9,
                 child: Stack(
                   children: [
-                    // 크라프트지 결.
+                    // ── 표지 표면 ───────────────────────
                     Positioned.fill(
-                      child: IgnorePointer(
-                        child: RepaintBoundary(
-                          child: CustomPaint(
-                            painter: GrainPainter(
-                              opacity: 0.13,
-                              seed: folder.id.hashCode,
-                              fiber: 1.2,
-                            ),
-                          ),
-                        ),
+                      child: FolderSurface(
+                        color: folder.color,
+                        texture: folder.texture,
+                        seed: folder.id.hashCode,
                       ),
                     ),
 
-                    // 몸통 윗변의 종이 두께.
-                    Positioned(
+                    // 탭 아래로 이어지는 접힌 선(몸통 윗변의 두께).
+                    const Positioned(
                       left: 0,
                       right: 0,
                       top: tabHeight,
-                      height: 1.5,
-                      child: IgnorePointer(
-                        child: ColoredBox(
-                          color: Colors.white.withValues(alpha: 0.16),
-                        ),
-                      ),
+                      child: PaperEdge(strength: 0.9),
                     ),
 
                     // 오른쪽 위 모서리에 붙인 마스킹 테이프.
                     Positioned(
                       right: -14,
-                      top: tabHeight + 4,
+                      top: tabHeight + 6,
                       child: const WashiTape(
                         width: 74,
                         height: 19,
-                        color: Color(0x66F0E6CE),
+                        color: Color(0x55F0E6CE),
                         angle: -0.62,
                       ),
                     ),
 
-                    // 포켓 뒤에서 머리를 내민 실제 티켓들.
+                    // ── 포켓 뒤에서 머리를 내민 티켓들 ──────
                     for (var i = 0; i < preview.length && i < 3; i++)
                       Positioned(
-                        left: 18 + i * 46.0,
-                        top: tabHeight + 10 + (i.isOdd ? 4 : 0),
+                        left: 20 + i * 48.0,
+                        top: tabHeight + 8 + (i.isOdd ? 5 : 0),
                         child: _TicketPeek(
                           ticket: preview[i],
                           angle: (i.isEven ? -1 : 1) * (0.018 + i * 0.006),
@@ -316,8 +393,8 @@ class FolderCard extends StatelessWidget {
 
                     if (preview.isEmpty)
                       Positioned(
-                        left: 20,
-                        top: tabHeight + 30,
+                        left: 22,
+                        top: tabHeight + 26,
                         child: Text(
                           '비어 있는 서류철',
                           style: AppText.ui(
@@ -331,12 +408,12 @@ class FolderCard extends StatelessWidget {
                     const Positioned(
                       left: 0,
                       right: 0,
-                      top: FolderMetrics.pocketTop - 12,
-                      height: 12,
-                      child: LayerShadow(strength: 0.7),
+                      top: FolderMetrics.pocketTop - 14,
+                      height: 14,
+                      child: LayerShadow(strength: 0.75),
                     ),
 
-                    // 포켓(앞판).
+                    // ── 포켓(앞판) ─────────────────────
                     Positioned(
                       left: 0,
                       right: 0,
@@ -344,63 +421,49 @@ class FolderCard extends StatelessWidget {
                       bottom: 0,
                       child: ClipPath(
                         clipper: _PocketClipper(),
-                        child: PaperSurface(
-                          color: _pocketColor,
-                          grain: 0.12,
-                          fiber: 1.0,
-                          seed: folder.id.hashCode + 5,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 9, 18, 0),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    folder.subtitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppText.display(
-                                      size: 16,
-                                      weight: FontWeight.w600,
-                                      color: _onColor,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'FILE_${fileNo.toString().padLeft(2, '0')}  ·  $count',
-                                  style: AppText.data(
-                                    size: 9,
-                                    spacing: 0.6,
-                                    color: _onColor.withValues(alpha: 0.62),
-                                  ),
-                                ),
-                              ],
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: FolderSurface(
+                                color: _pocketColor,
+                                texture: folder.texture,
+                                seed: folder.id.hashCode + 31,
+                                wear: 0.7,
+                              ),
                             ),
-                          ),
+                            // 포켓 윗변의 종이 두께.
+                            const Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              child: PaperEdge(strength: 1.0),
+                            ),
+                            Positioned.fill(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 9, 18, 0),
+                                child: _PocketPlate(
+                                  title: folder.subtitle,
+                                  fileNo: _fileNoLabel,
+                                  count: count,
+                                  onColor: _onColor,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
 
-                    // 포켓 윗변의 종이 단면.
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: FolderMetrics.pocketTop,
-                      height: 1.5,
-                      child: IgnorePointer(
-                        child: ColoredBox(
-                          color: Colors.white.withValues(alpha: 0.18),
-                        ),
-                      ),
-                    ),
-
-                    // 탭 위의 다이모 라벨.
+                    // ── 탭 위의 이름표 ─────────────────
                     Positioned(
                       left: tabStart + (tabWidth - labelWidth) / 2,
-                      top: 6,
+                      top: font.onTape ? 6 : 7,
                       width: labelWidth,
-                      child: DymoLabel(text: _code),
+                      child: FolderTabLabel(
+                        text: _code,
+                        font: font,
+                        onColor: _onColor,
+                      ),
                     ),
                   ],
                 ),
@@ -413,7 +476,65 @@ class FolderCard extends StatelessWidget {
   }
 }
 
+/// 포켓 띠에 인쇄된 정보 한 줄. 겹쳐 있어도 이 44pt 안에서 다 읽혀야 합니다.
+class _PocketPlate extends StatelessWidget {
+  const _PocketPlate({
+    required this.title,
+    required this.fileNo,
+    required this.count,
+    required this.onColor,
+  });
+
+  final String title;
+  final String fileNo;
+  final int count;
+  final Color onColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // 왼쪽 정리 표시. 서류철에 찍힌 도장 같은 작은 사각.
+        Container(
+          width: 3,
+          height: 17,
+          margin: const EdgeInsets.only(right: 10),
+          color: onColor.withValues(alpha: 0.4),
+        ),
+        Expanded(
+          child: DebossedText(
+            title,
+            maxLines: 1,
+            depth: 0.6,
+            style: AppText.ui(
+              size: 15,
+              weight: FontWeight.w600,
+              height: 1.15,
+              color: onColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '$fileNo · $count',
+          maxLines: 1,
+          overflow: TextOverflow.clip,
+          style: AppText.data(
+            size: 9.5,
+            spacing: 1.4,
+            color: onColor.withValues(alpha: 0.62),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// 포켓 뒤에 꽂힌 티켓의 머리 부분만 잘라 보여줍니다.
+///
+/// [TicketFront]가 원도를 축척해 그리므로, 폭만 주면 진짜 축소 인쇄물처럼
+/// 비율이 맞습니다. 아래쪽은 포켓에 가려지도록 잘라냅니다.
 class _TicketPeek extends StatelessWidget {
   const _TicketPeek({required this.ticket, this.angle = 0});
 
@@ -421,11 +542,10 @@ class _TicketPeek extends StatelessWidget {
   final double angle;
 
   static const _width = 62.0;
-  static const _visible = 84.0;
+  static const _visible = 72.0;
 
   @override
   Widget build(BuildContext context) {
-    // 프레임 비율대로 전체 크기를 잡은 뒤, 위에서 _visible 만큼만 남깁니다.
     final full = _width / ticket.frame.aspect;
     final visible = full < _visible ? full : _visible;
 
@@ -440,20 +560,22 @@ class _TicketPeek extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 7,
+                blurRadius: 8,
                 offset: const Offset(1, 3),
               ),
             ],
           ),
+          // 위에서부터 visible/full 만큼만 남기고 잘라 냅니다.
           child: ClipRect(
-            child: OverflowBox(
+            child: Align(
               alignment: Alignment.topCenter,
-              minWidth: _width,
-              maxWidth: _width,
-              minHeight: full,
-              maxHeight: full,
-              child: RepaintBoundary(
-                child: TicketFront(ticket: ticket, compact: true),
+              heightFactor: visible / full,
+              child: SizedBox(
+                width: _width,
+                height: full,
+                child: RepaintBoundary(
+                  child: TicketFront(ticket: ticket, compact: true),
+                ),
               ),
             ),
           ),
@@ -480,19 +602,25 @@ class FolderCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final code = folder.label
+    final font = folder.font;
+    var code = folder.label
         .replaceAll('/', ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
-        .trim()
-        .toUpperCase();
+        .trim();
+    if (font.upperCase) code = code.toUpperCase();
+
+    final onColor =
+    ThemeData.estimateBrightnessForColor(folder.color) == Brightness.dark
+        ? AppColors.stockLight
+        : AppColors.ink;
 
     return LayoutBuilder(
       builder: (context, c) {
-        final labelWidth = DymoLabel.widthOf(code);
+        final labelWidth = FolderTabLabel.widthOf(code, font);
         final tabWidth = clampDouble(
-            labelWidth + 32, 104, clampDouble(c.maxWidth - 24, 104, 400));
-        final travel = clampDouble(c.maxWidth - 24 - tabWidth, 0, double.infinity);
-        // 0이 아니라 0.0이어야 전체 식이 double로 잡힙니다(0이면 num이 되어 컴파일 에러).
+            labelWidth + 30, 104, clampDouble(c.maxWidth - 24, 104, 420));
+        final travel =
+        clampDouble(c.maxWidth - 24 - tabWidth, 0, double.infinity);
         final tabStart =
             12 + (totalSlots <= 1 ? 0.0 : travel * tabSlot / (totalSlots - 1));
 
@@ -504,21 +632,27 @@ class FolderCover extends StatelessWidget {
           child: Stack(
             children: [
               Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: GrainPainter(
-                      opacity: 0.13,
-                      seed: folder.id.hashCode,
-                      fiber: 1.2,
-                    ),
-                  ),
+                child: FolderSurface(
+                  color: folder.color,
+                  texture: folder.texture,
+                  seed: folder.id.hashCode,
                 ),
+              ),
+              const Positioned(
+                left: 0,
+                right: 0,
+                top: FolderMetrics.tabHeight,
+                child: PaperEdge(strength: 0.9),
               ),
               Positioned(
                 left: tabStart + (tabWidth - labelWidth) / 2,
-                top: 6,
+                top: font.onTape ? 6 : 7,
                 width: labelWidth,
-                child: DymoLabel(text: code),
+                child: FolderTabLabel(
+                  text: code,
+                  font: font,
+                  onColor: onColor,
+                ),
               ),
             ],
           ),

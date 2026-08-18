@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'layer.dart';
+import '../theme/folder_style.dart';
 
 /// 티켓 실루엣 프리셋.
 ///
@@ -120,20 +121,54 @@ class Ticket {
 }
 
 /// 인덱스 탭 하나 = 서류철 하나.
+/// 인덱스 탭 하나 = 서류철 하나.
+///
+/// 이름·라벨·색에 더해 **서체([font])와 표지 질감([texture])** 까지 가변입니다.
+/// 한 번 만들고 못 바꾸던 값이 없도록 전부 `final`을 떼어냈습니다.
 class ArchiveFolder {
   ArchiveFolder({
     required this.id,
     required this.label,
     required this.subtitle,
     required this.color,
+    this.font = FolderFont.dymo,
+    this.texture = FolderTexture.kraft,
   });
 
   final String id;
 
-  /// 인덱스 탭에 찍히는 영문 라벨. 편집 시트에서 바꿀 수 있습니다.
+  /// 인덱스 탭에 찍히는 라벨.
   String label;
 
-  /// 서류철 이름(한글).
+  /// 서류철 이름(한글). 포켓 띠에 인쇄됩니다.
   String subtitle;
+
+  /// 표지 색.
   Color color;
+
+  /// 탭 이름을 어떤 필기구로 적었는지.
+  FolderFont font;
+
+  /// 표지를 무엇으로 쌌는지.
+  FolderTexture texture;
+
+  /// 로컬 DB(Hive/Isar)나 Supabase로 옮길 때 쓸 직렬화.
+  /// enum은 인덱스가 아니라 **이름**으로 저장합니다(항목 순서가 바뀌어도 안전).
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'label': label,
+    'subtitle': subtitle,
+    'color': color.toARGB32(),
+    'font': font.name,
+    'texture': texture.name,
+  };
+
+  factory ArchiveFolder.fromJson(Map<String, dynamic> j) => ArchiveFolder(
+    id: j['id'] as String,
+    label: j['label'] as String? ?? '',
+    subtitle: j['subtitle'] as String? ?? '',
+    color: Color(j['color'] as int),
+    font: FolderFont.parse(j['font'] as String?),
+    texture: FolderTexture.parse(j['texture'] as String?),
+  );
 }

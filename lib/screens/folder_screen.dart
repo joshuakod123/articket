@@ -11,6 +11,7 @@ import '../widgets/paper.dart';
 import '../widgets/scrapbook.dart';
 import '../widgets/ticket_card.dart';
 import 'ticket_detail_screen.dart';
+import '../widgets/stub_button.dart';
 
 /// 보기 방식. 기본은 스크랩북(펼친 다이어리)입니다.
 enum FolderView { book, grid, list }
@@ -66,7 +67,9 @@ class _FolderScreenState extends State<FolderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.folder.label),
+        title: Text(widget.folder.label,
+          style: widget.folder.font.style(size: 13, color: AppColors.ink),
+        ),
         actions: [
           IconButton(
             tooltip: switch (_view) {
@@ -105,15 +108,10 @@ class _FolderScreenState extends State<FolderScreen> {
           const WallGrain(seed: 5),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      bottomNavigationBar: NewTicketRail(
         onPressed: _create,
-        backgroundColor: AppColors.oxblood,
-        foregroundColor: AppColors.stockLight,
-        elevation: 2,
-        shape: const RoundedRectangleBorder(),
-        icon: const Icon(Icons.add, size: 18),
-        label: Text('티켓 만들기',
-            style: AppText.ui(size: 13, weight: FontWeight.w600)),
+        code: 'NEW',
+        hint: '${widget.folder.label} · ${store.countIn(widget.folder.id)} FILED',
       ),
     );
   }
@@ -179,7 +177,7 @@ class _FolderScreenState extends State<FolderScreen> {
           ),
         ),
         _PageDots(count: pages.length, page: _page),
-        const SizedBox(height: 74),
+        const SizedBox(height: 10),
       ],
     );
   }
@@ -191,7 +189,7 @@ class _FolderScreenState extends State<FolderScreen> {
       slivers: [
         SliverToBoxAdapter(child: _sectionHead(tickets.length)),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           sliver: SliverGrid(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
@@ -217,7 +215,7 @@ class _FolderScreenState extends State<FolderScreen> {
       slivers: [
         SliverToBoxAdapter(child: _sectionHead(tickets.length)),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           sliver: SliverList.separated(
             itemCount: tickets.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),

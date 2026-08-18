@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/ticket.dart';
 import '../models/layer.dart';
 import '../theme/app_colors.dart';
+import '../theme/folder_style.dart';
 
 /// 화면을 채우기 위한 임시 데이터. Phase 1에서 로컬 DB로 교체합니다.
 final List<ArchiveFolder> mockFolders = [

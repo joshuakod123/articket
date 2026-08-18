@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
+import 'package:flutter/services.dart';
 
 import '../data/ticket_store.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/folder_open_route.dart';
+import '../widgets/folder_texture.dart';
 import '../widgets/index_tab.dart';
 import '../widgets/nav_icons.dart';
 import '../widgets/paper.dart';
 import 'folder_screen.dart';
+import 'folder_workbench.dart';
 import 'market_screen.dart';
 
 /// 앱의 첫 화면. 가로 서류철이 겹쳐 쌓인 파일 드로어.
 ///
 /// 탭하면 표지가 젖혀 열리며 스크랩북으로 들어가고,
-/// 길게 누르면 이름을 고치거나 서류철째 버릴 수 있습니다.
+/// **길게 누르면 서류철이 책상 위로 뽑혀 나와**(작업대) 이름·서체·색·질감을
+/// 그 자리에서 고칠 수 있습니다.
 class ArchiveScreen extends StatefulWidget {
   const ArchiveScreen({super.key});
 
@@ -31,8 +34,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   final _cardKeys = <String, GlobalKey>{};
 
   static const _folderHeight = FolderMetrics.cardHeight;
-
-  /// 다음 서류철이 이만큼 아래에서 시작해 앞 서류철 몸통을 덮습니다.
   static const _step = FolderMetrics.step;
 
   @override
@@ -40,6 +41,9 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // 서랍 안쪽. 위가 어둡고 아래로 갈수록 밝아지는 깊이감.
+          const Positioned.fill(child: _DrawerBackdrop()),
+
           SafeArea(
             child: ListenableBuilder(
               listenable: store,
@@ -53,12 +57,12 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                     SliverToBoxAdapter(
                       child: _Header(
                         total: store.tickets.length,
-                        onAdd: () => _editFolder(null),
+                        onAdd: _newFolder,
                       ),
                     ),
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 56),
                         child: SizedBox(
                           height: stackHeight,
                           child: Stack(
@@ -69,14 +73,14 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                                   Positioned(
                                     top: i * _step +
                                         FolderMetrics.tabHeight -
-                                        22,
+                                        24,
                                     left: 0,
                                     right: 0,
-                                    height: 22,
+                                    height: 24,
                                     child: const LayerShadow(),
                                   ),
                                 AnimatedPositioned(
-                                  duration: const Duration(milliseconds: 240),
+                                  duration: const Duration(milliseconds: 260),
                                   curve: Curves.easeOutCubic,
                                   top: i * _step,
                                   left: 0,
@@ -94,18 +98,12 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                                       preview: store.ticketsIn(folders[i].id),
                                       onTap: () => _open(folders[i], i),
                                       onLongPress: () =>
-                                          _folderMenu(folders[i]),
+                                          _editFolder(folders[i], i),
                                     ),
                                   ),
                                 ),
                               ],
-                              if (folders.isEmpty)
-                                Center(
-                                  child: Text('서류철이 없습니다. 오른쪽 위 +로 만드세요',
-                                      style: AppText.ui(
-                                          size: 13,
-                                          color: AppColors.inkSoft)),
-                                ),
+                              if (folders.isEmpty) const _EmptyDrawer(),
                             ],
                           ),
                         ),
@@ -116,8 +114,9 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
               },
             ),
           ),
-          // 플라스터 벽 질감.
-          const WallGrain(opacity: 0.04),
+
+          // 종이 질감 한 겹.
+          const WallGrain(opacity: 0.045),
         ],
       ),
       bottomNavigationBar: const _BottomBar(),
@@ -160,241 +159,84 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
 
   // ── 서류철 관리 ─────────────────────────────────
 
-  /// 길게 눌렀을 때: 고치기 / 버리기.
-  Future<void> _folderMenu(ArchiveFolder folder) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.stockLight,
-      shape: const RoundedRectangleBorder(),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-              child: Text(folder.subtitle,
-                  style: AppText.display(size: 20, color: AppColors.ink)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined,
-                  size: 20, color: AppColors.ink),
-              title: Text('이름·색 고치기',
-                  style: AppText.ui(size: 14, color: AppColors.ink)),
-              onTap: () => Navigator.pop(context, 'edit'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline,
-                  size: 20, color: AppColors.oxblood),
-              title: Text('서류철 버리기',
-                  style: AppText.ui(size: 14, color: AppColors.oxblood)),
-              onTap: () => Navigator.pop(context, 'delete'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+  /// 길게 누르면 서류철이 책상 위로 뽑혀 나옵니다.
+  Future<void> _editFolder(ArchiveFolder folder, int index) async {
+    HapticFeedback.mediumImpact();
+    setState(() => _lifted = index);
+
+    await openFolderWorkbench(
+      context,
+      store: store,
+      folder: folder,
+      fileNo: index + 1,
+      preview: store.ticketsIn(folder.id),
     );
 
     if (!mounted) return;
-    if (action == 'edit') await _editFolder(folder);
-    if (action == 'delete') await _deleteFolder(folder);
+    setState(() => _lifted = null);
+    // 파쇄된 서류철의 키는 정리합니다.
+    if (store.folderById(folder.id) == null) _cardKeys.remove(folder.id);
   }
 
-  Future<void> _deleteFolder(ArchiveFolder folder) async {
-    final n = store.countIn(folder.id);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.stockLight,
-        shape: const RoundedRectangleBorder(),
-        title: Text('서류철을 버릴까요?',
-            style: AppText.ui(size: 16, color: AppColors.ink)),
-        content: Text(
-            n == 0
-                ? '「${folder.subtitle}」 서류철을 버립니다.'
-                : '「${folder.subtitle}」 안의 티켓 $n장도 함께 버려집니다.\n복구할 수 없습니다.',
-            style: AppText.ui(size: 13, color: AppColors.inkSoft)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('그대로 두기',
-                style: AppText.ui(size: 13, color: AppColors.ink)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('버리기',
-                style: AppText.ui(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    color: AppColors.oxblood)),
-          ),
-        ],
-      ),
-    );
-    if (ok == true && mounted) {
-      _cardKeys.remove(folder.id);
-      store.removeFolder(folder.id);
-    }
-  }
-
-  /// [folder]가 null이면 새로 만들고, 아니면 그 서류철을 고칩니다.
-  Future<void> _editFolder(ArchiveFolder? folder) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.stockLight,
-      shape: const RoundedRectangleBorder(),
-      builder: (context) => _FolderForm(folder: folder, store: store),
+  Future<void> _newFolder() async {
+    await openFolderWorkbench(
+      context,
+      store: store,
+      fileNo: store.folders.length + 1,
     );
   }
 }
 
-/// 서류철 만들기/고치기 시트. 이름 · 영문 라벨 · 색.
-class _FolderForm extends StatefulWidget {
-  const _FolderForm({required this.folder, required this.store});
-
-  final ArchiveFolder? folder;
-  final TicketStore store;
-
-  @override
-  State<_FolderForm> createState() => _FolderFormState();
-}
-
-class _FolderFormState extends State<_FolderForm> {
-  late final _name = TextEditingController(text: widget.folder?.subtitle ?? '');
-  late final _label = TextEditingController(text: widget.folder?.label ?? '');
-  late Color _color = widget.folder?.color ?? AppColors.tabColors.first;
-
-  bool get _isNew => widget.folder == null;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _label.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    final name = _name.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('서류철 이름을 적어주세요')),
-      );
-      return;
-    }
-
-    // 라벨을 비우면 순번으로 자동 생성합니다.
-    var label = _label.text.trim().toUpperCase();
-    if (label.isEmpty) {
-      label = 'FILE ${(widget.store.folders.length + 1).toString().padLeft(2, '0')}';
-    }
-
-    if (_isNew) {
-      widget.store.addFolder(ArchiveFolder(
-        id: const Uuid().v4(),
-        label: label,
-        subtitle: name,
-        color: _color,
-      ));
-    } else {
-      widget.folder!
-        ..subtitle = name
-        ..label = label
-        ..color = _color;
-      widget.store.touch();
-    }
-    Navigator.pop(context);
-  }
+/// 서랍 안쪽 배경. 위쪽은 그늘지고 아래로 열립니다.
+class _DrawerBackdrop extends StatelessWidget {
+  const _DrawerBackdrop();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+    return const IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.bgDeep,
+              AppColors.bg,
+              AppColors.bg,
+            ],
+            stops: [0.0, 0.28, 1.0],
+          ),
+        ),
+        child: SizedBox.expand(),
       ),
+    );
+  }
+}
+
+class _EmptyDrawer extends StatelessWidget {
+  const _EmptyDrawer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_isNew ? 'NEW FOLDER' : 'EDIT FOLDER',
-              style: AppText.eyebrow(color: AppColors.foil)),
+          Container(
+            width: 120,
+            height: 3,
+            color: AppColors.line,
+          ),
           const SizedBox(height: 16),
-          _field('이름', _name, hint: '예: 올해 다녀온 전시'),
-          _field('탭 라벨 (짧은 영문, 비우면 자동)', _label, hint: '2026 ARCHIVE'),
-          const SizedBox(height: 8),
-          Text('색', style: AppText.ui(size: 12, color: AppColors.inkSoft)),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              for (final c in AppColors.tabColors)
-                GestureDetector(
-                  onTap: () => setState(() => _color = c),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    margin: const EdgeInsets.only(right: 10),
-                    decoration: BoxDecoration(
-                      color: c,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _color == c
-                            ? AppColors.ink
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: _color == c
-                        ? const Icon(Icons.check,
-                        size: 16, color: AppColors.stockLight)
-                        : null,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _save,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.oxblood,
-                foregroundColor: AppColors.stockLight,
-                shape: const RoundedRectangleBorder(),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: Text(_isNew ? '서류철 만들기' : '저장',
-                  style: AppText.ui(size: 14, weight: FontWeight.w600)),
-            ),
-          ),
+          Text('빈 서랍입니다',
+              style: AppText.display(size: 20, color: AppColors.inkSoft)),
+          const SizedBox(height: 6),
+          Text('오른쪽 위에서 서류철을 한 장 매세요',
+              style: AppText.ui(size: 12, color: AppColors.pulp)),
         ],
       ),
     );
   }
-
-  Widget _field(String label, TextEditingController c, {String? hint}) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: TextField(
-          controller: c,
-          style: AppText.ui(size: 14, color: AppColors.ink),
-          decoration: InputDecoration(
-            labelText: label,
-            hintText: hint,
-            hintStyle: AppText.ui(size: 13, color: AppColors.pulp),
-            labelStyle: AppText.ui(size: 12, color: AppColors.inkSoft),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.line),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.foil),
-            ),
-          ),
-        ),
-      );
 }
 
 class _Header extends StatelessWidget {
@@ -406,7 +248,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 12, 20),
+      padding: const EdgeInsets.fromLTRB(20, 24, 12, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -427,8 +269,11 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Text('나의 티켓북',
-                    style: AppText.display(size: 36, color: AppColors.ink)),
+                child: DebossedText(
+                  '나의 티켓북',
+                  depth: 0.35,
+                  style: AppText.display(size: 36, color: AppColors.ink),
+                ),
               ),
               IconButton(
                 tooltip: '서류철 만들기',
@@ -446,7 +291,7 @@ class _Header extends StatelessWidget {
               children: [
                 Container(height: 1, color: AppColors.line),
                 const SizedBox(height: 8),
-                Text('탭하면 열리고, 길게 누르면 고치거나 버립니다',
+                Text('탭하면 열리고, 길게 누르면 책상 위로 꺼내 고칩니다',
                     style: AppText.ui(size: 12, color: AppColors.inkSoft)),
               ],
             ),
