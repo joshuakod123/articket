@@ -11,9 +11,11 @@ import '../widgets/index_tab.dart';
 import '../widgets/nav_icons.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
+import 'calendar_screen.dart';
 import 'folder_screen.dart';
 import 'folder_workbench.dart';
 import 'market_screen.dart';
+import 'profile_screen.dart';
 
 /// 앱의 첫 화면. 가로 서류철이 겹쳐 쌓인 파일 드로어.
 ///
@@ -57,7 +59,8 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                   slivers: [
                     SliverToBoxAdapter(
                       child: _Header(
-                        total: store.tickets.length,
+                        folderCount: folders.length,
+                        ticketCount: store.tickets.length,
                         onAdd: _newFolder,
                       ),
                     ),
@@ -99,6 +102,8 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                                       preview: store.ticketsIn(folders[i].id),
                                       onTap: () => _open(folders[i], i),
                                       onLongPress: () =>
+                                          _editFolder(folders[i], i),
+                                      onEdit: () =>
                                           _editFolder(folders[i], i),
                                     ),
                                   ),
@@ -241,9 +246,18 @@ class _EmptyDrawer extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.total, required this.onAdd});
+  const _Header({
+    required this.folderCount,
+    required this.ticketCount,
+    required this.onAdd,
+  });
 
-  final int total;
+  /// 서랍에 꽂힌 서류철 수.
+  final int folderCount;
+
+  /// 그 안에 든 티켓 수.
+  final int ticketCount;
+
   final VoidCallback onAdd;
 
   @override
@@ -258,10 +272,13 @@ class _Header extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // 로고. 표지 각인처럼 자간을 벌리고 크기를 키웠습니다.
                 Text('ARTICKET',
-                    style: AppText.eyebrow(color: AppColors.oxblood)),
-                Text('$total FILED',
-                    style: AppText.data(size: 10, color: AppColors.inkSoft)),
+                    style: AppText.wordmark(size: 18, color: AppColors.oxblood)),
+                // 예전에는 티켓 수만 'N FILED'로 찍혀서, 화면의 서류철 수와
+                // 안 맞는 것처럼 보였습니다. 무엇을 센 숫자인지 밝힙니다.
+                Text('$folderCount FILES · $ticketCount TICKETS',
+                    style: AppText.data(size: 9.5, color: AppColors.inkSoft)),
               ],
             ),
           ),
@@ -292,7 +309,7 @@ class _Header extends StatelessWidget {
               children: [
                 Container(height: 1, color: AppColors.line),
                 const SizedBox(height: 8),
-                Text('탭하면 열리고, 길게 누르면 책상 위로 꺼내 고칩니다',
+                Text('탭하면 열리고, ⋯ 를 누르면 책상 위로 꺼내 고칩니다',
                     style: AppText.ui(size: 12, color: AppColors.inkSoft)),
               ],
             ),
@@ -330,10 +347,17 @@ class _BottomBar extends StatelessWidget {
                     );
                   }),
                   _item(context, NavSymbol.dateStamp, '캘린더', false, () {
-                    PaperToast.show(context, '문화 캘린더는 Phase 2에서 붙습니다',
-                        detail: 'ROADMAP · PHASE 2');
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const CalendarScreen()),
+                    );
                   }),
-                  _item(context, NavSymbol.pin, '내 정보', false, null),
+                  _item(context, NavSymbol.pin, '내 정보', false, () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const ProfileScreen()),
+                    );
+                  }),
                 ],
               ),
             ),

@@ -160,27 +160,20 @@ class ArchiveFolder {
     required this.color,
     this.font = FolderFont.dymo,
     this.texture = FolderTexture.kraft,
-  });
+    List<ScrapLayer>? pageLayers,
+  }) : pageLayers = pageLayers ?? [];
 
   final String id;
-
-  /// 인덱스 탭에 찍히는 라벨.
   String label;
-
-  /// 서류철 이름(한글). 포켓 띠에 인쇄됩니다.
   String subtitle;
-
-  /// 표지 색.
   Color color;
-
-  /// 탭 이름을 어떤 필기구로 적었는지.
   FolderFont font;
-
-  /// 표지를 무엇으로 쌌는지.
   FolderTexture texture;
 
-  /// 로컬 DB(Hive/Isar)나 Supabase로 옮길 때 쓸 직렬화.
-  /// enum은 인덱스가 아니라 **이름**으로 저장합니다(항목 순서가 바뀌어도 안전).
+  /// 스크랩북 **페이지 배경**에 붙인 것들. 티켓이 아니라 서류철에 딸립니다.
+  /// 티켓을 지워도 남고, 페이지를 넘겨도 같은 장식이 깔립니다.
+  final List<ScrapLayer> pageLayers;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'label': label,
@@ -188,6 +181,7 @@ class ArchiveFolder {
     'color': color.toARGB32(),
     'font': font.name,
     'texture': texture.name,
+    'pageLayers': ScrapLayer.encodeList(pageLayers),
   };
 
   factory ArchiveFolder.fromJson(Map<String, dynamic> j) => ArchiveFolder(
@@ -197,5 +191,8 @@ class ArchiveFolder {
     color: Color(j['color'] as int),
     font: FolderFont.parse(j['font'] as String?),
     texture: FolderTexture.parse(j['texture'] as String?),
+    pageLayers: j['pageLayers'] == null
+        ? null
+        : ScrapLayer.decodeList(j['pageLayers'] as String),
   );
 }

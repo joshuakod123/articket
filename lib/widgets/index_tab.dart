@@ -268,6 +268,7 @@ class FolderCard extends StatelessWidget {
     required this.totalSlots,
     required this.onTap,
     this.onLongPress,
+    this.onEdit,
     this.lifted = false,
     this.preview = const [],
     this.fileNo = 1,
@@ -281,6 +282,10 @@ class FolderCard extends StatelessWidget {
   final int totalSlots;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+
+  /// 포켓 오른쪽 끝의 손잡이. 길게 누르기가 어려운 환경(시뮬레이터, 접근성
+  /// 보조기기)에서도 **한 번의 탭으로** 작업대를 열 수 있게 하는 통로입니다.
+  final VoidCallback? onEdit;
 
   /// 눌린 순간 살짝 뽑혀 올라옵니다.
   final bool lifted;
@@ -452,6 +457,7 @@ class FolderCard extends StatelessWidget {
                                   fileNo: _fileNoLabel,
                                   count: count,
                                   onColor: _onColor,
+                                  onEdit: onEdit,
                                 ),
                               ),
                             ),
@@ -553,12 +559,14 @@ class _PocketPlate extends StatelessWidget {
     required this.fileNo,
     required this.count,
     required this.onColor,
+    this.onEdit,
   });
 
   final String title;
   final String fileNo;
   final int count;
   final Color onColor;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -607,7 +615,55 @@ class _PocketPlate extends StatelessWidget {
             color: onColor.withValues(alpha: 0.62),
           ),
         ),
+        if (onEdit != null) ...[
+          const SizedBox(width: 4),
+          _PocketHandle(onColor: onColor, onTap: onEdit!),
+        ],
       ],
+    );
+  }
+}
+
+/// 포켓 오른쪽 끝에 파인 작은 손잡이. 누르면 작업대가 열립니다.
+///
+/// 길게 누르기는 시뮬레이터에서 재현하기 까다롭고, 손이 불편한 사용자에게도
+/// 불리합니다. **같은 기능으로 가는 눈에 보이는 길**을 하나 더 냅니다.
+class _PocketHandle extends StatelessWidget {
+  const _PocketHandle({required this.onColor, required this.onTap});
+
+  final Color onColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Semantics(
+        button: true,
+        label: '서류철 고치기',
+        child: SizedBox(
+          width: 38,
+          height: 34,
+          child: Center(
+            child: Container(
+              width: 26,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: onColor.withValues(alpha: 0.10),
+                border: Border.all(color: onColor.withValues(alpha: 0.35)),
+                borderRadius: BorderRadius.circular(2),
+              ),
+              child: Icon(
+                Icons.more_horiz,
+                size: 15,
+                color: onColor.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -5,21 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../data/ticket_store.dart';
-import '../models/layer.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/paper.dart';
+import '../widgets/paper_toast.dart';
+import '../widgets/ticket_canvas.dart';
 import '../widgets/ticket_card.dart';
 import 'editor_screen.dart';
 import 'ticket_style_sheet.dart';
-import '../widgets/scrap_layers.dart';
-import '../widgets/paper_toast.dart';
 
+// 에디터가 이 파일에서 가져다 쓰던 이름을 그대로 다시 내보냅니다.
 export '../widgets/scrap_layers.dart' show buildLayerContent;
 
 /// 티켓 한 장을 펼친 화면.
-/// 스크랩북 레이어 위에 3D 플립 티켓이 얹힙니다.
+///
+/// 붙여둔 스크랩 레이어는 **티켓 앞면에 함께 붙어** 있어서, 뒤집으면 같이 넘어갑니다.
+/// (예전에는 화면 배경에 깔려 있어서 티켓만 돌아가고 스티커는 남았습니다)
 class TicketDetailScreen extends StatefulWidget {
   const TicketDetailScreen({super.key, required this.ticketId});
 
@@ -49,7 +51,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
     _listenGyro();
   }
 
-  /// 자이로가 없는 기기(데스크톱/웹/에뮬레이터)에서도 앱이 죽지 않도록 감쌉니다.
+  /// 자이로가 없는 기기(데스크톱/웹/시뮬레이터)에서도 죽지 않도록 감쌉니다.
   void _listenGyro() {
     try {
       _gyro = gyroscopeEventStream().listen(
@@ -75,7 +77,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
   }
 
   void _toggle() {
-    // 모션 축소 설정을 켠 사용자는 애니메이션 없이 바로 전환합니다.
     final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduce) {
       _flip.value = _showingBack ? 0 : 1;
@@ -97,7 +98,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(ticket.serial),
+            // 발권 번호(AK-2026-…)는 사람이 읽을 정보가 아니라 내부 식별자입니다.
+            // 화면 제목에는 관람일을 띄우고, 번호는 티켓 위에만 남깁니다.
+            title: Text(
+              ticket.dateLabel,
+              style: AppText.data(size: 12, spacing: 1.6, color: AppColors.ink),
+            ),
             actions: [
               IconButton(
                 tooltip: '모양 바꾸기',
@@ -120,7 +126,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 ),
               ),
               IconButton(
-                tooltip: '삭제',
+                tooltip: '버리기',
                 icon: const Icon(Icons.delete_outline),
                 onPressed: () => _confirmDelete(ticket),
               ),
@@ -129,24 +135,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
           ),
           body: Stack(
             children: [
-              // ── 스크랩북 레이어 (배경) ─────────────────
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                      final canvas = Size(c.maxWidth, c.maxHeight);
-                      return Stack(
-                        children: [
-                          for (final l in ticket.layers)
-                            _PlacedLayer(layer: l, canvas: canvas),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
+              const WallGrain(seed: 9),
 
-              // ── 플립 티켓 ─────────────────────────────
               Center(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -164,9 +154,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                         builder: (context, _) => _FlipCard(
                           progress: _flip.value,
                           tilt: _tilt,
+                          // 앞면 = 티켓 + 붙여둔 것들. 한 몸으로 돕니다.
                           front: Hero(
                             tag: 'ticket-${ticket.id}',
-                            child: TicketFront(ticket: ticket, tilt: _tilt),
+                            child: TicketCanvas(ticket: ticket, tilt: _tilt),
                           ),
                           back: TicketBack(ticket: ticket),
                         ),
@@ -176,9 +167,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 ),
               ),
 
-              const WallGrain(seed: 9),
-
-              // ── 안내 & 액션 ───────────────────────────
               Positioned(
                 left: 0,
                 right: 0,
@@ -186,7 +174,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 child: _ActionBar(
                   hint: _showingBack ? '탭하면 앞면' : '탭하면 감상 기록',
                   onDecorate: () => Navigator.of(context).push(
-                    MaterialPageRoute(
+                    MaterialPageRoute<void>(
                       builder: (_) => EditorScreen(ticketId: ticket.id),
                     ),
                   ),
@@ -205,10 +193,14 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.stockLight,
         shape: const RoundedRectangleBorder(),
-        title: Text('티켓을 버릴까요?',
+        title: Text('이 티켓을 버릴까요?',
             style: AppText.ui(size: 16, color: AppColors.ink)),
-        content: Text('${ticket.serial}은(는) 복구할 수 없습니다.',
-            style: AppText.ui(size: 13, color: AppColors.inkSoft)),
+        // 사용자가 알아볼 수 있는 이름으로 묻습니다.
+        content: Text(
+          '「${ticket.title.replaceAll('\n', ' ')}」\n'
+              '붙여둔 것들도 함께 사라지고, 되돌릴 수 없습니다.',
+          style: AppText.ui(size: 13, height: 1.6, color: AppColors.inkSoft),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -276,34 +268,7 @@ class _FlipCard extends StatelessWidget {
   }
 }
 
-/// 캔버스 위 스크랩 레이어 렌더러. 에디터와 상세 화면이 공유합니다.
-class _PlacedLayer extends StatelessWidget {
-  const _PlacedLayer({required this.layer, required this.canvas});
-
-  final ScrapLayer layer;
-  final Size canvas;
-
-  @override
-  Widget build(BuildContext context) {
-    final pos = layer.offsetIn(canvas);
-    return Positioned(
-      left: pos.dx,
-      top: pos.dy,
-      child: FractionalTranslation(
-        translation: const Offset(-0.5, -0.5),
-        child: Transform.rotate(
-          angle: layer.rotation,
-          child: Transform.scale(
-            scale: layer.scale,
-            child: buildLayerContent(layer),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
+/// 화면 아래 안내 + 꾸미기 버튼.
 class _ActionBar extends StatelessWidget {
   const _ActionBar({required this.hint, required this.onDecorate});
 
@@ -312,38 +277,43 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.bg.withValues(alpha: 0), AppColors.bg],
-        ),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.stock,
+        border: Border(top: BorderSide(color: AppColors.line)),
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(hint,
-                  style: AppText.data(size: 10, color: AppColors.inkSoft)),
-            ),
-            FilledButton.icon(
-              onPressed: onDecorate,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.ink,
-                foregroundColor: AppColors.stockLight,
-                shape: const RoundedRectangleBorder(),
-                padding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Stack(
+        children: [
+          const WallGrain(opacity: 0.05, seed: 44),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 14, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      hint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.ui(size: 12, color: AppColors.inkSoft),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: onDecorate,
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 17),
+                    label: Text('꾸미기',
+                        style: AppText.ui(
+                            size: 13, weight: FontWeight.w600)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.oxblood,
+                    ),
+                  ),
+                ],
               ),
-              icon: const Icon(Icons.auto_fix_high_outlined, size: 16),
-              label: Text('꾸미기',
-                  style: AppText.ui(size: 13, weight: FontWeight.w600)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

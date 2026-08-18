@@ -7,11 +7,13 @@ import '../data/ticket_store.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
 import '../widgets/scrapbook.dart';
-import '../widgets/ticket_card.dart';
-import 'ticket_detail_screen.dart';
 import '../widgets/stub_button.dart';
+import '../widgets/ticket_canvas.dart';
+import 'page_decor_screen.dart';
+import 'ticket_detail_screen.dart';
 
 /// 보기 방식. 기본은 스크랩북(펼친 다이어리)입니다.
 enum FolderView { book, grid, list }
@@ -20,7 +22,7 @@ enum FolderView { book, grid, list }
 ///
 /// 서류철을 열면 손으로 꾸민 스크랩북이 펼쳐집니다. 페이지를 옆으로 넘기면
 /// 티켓이 마스킹 테이프로 붙어 있고, 옆에 손글씨로 감상이 적혀 있습니다.
-/// 바인더(3열 그리드)와 목록으로도 볼 수 있고, 길게 누르면 티켓을 버립니다.
+/// 바인더(3열 그리드)와 목록으로도 볼 수 있습니다.
 class FolderScreen extends StatefulWidget {
   const FolderScreen({super.key, required this.folder});
 
@@ -67,10 +69,16 @@ class _FolderScreenState extends State<FolderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.folder.label,
+        title: Text(
+          widget.folder.label,
           style: widget.folder.font.style(size: 13, color: AppColors.ink),
         ),
         actions: [
+          IconButton(
+            tooltip: '페이지 꾸미기',
+            onPressed: _decorate,
+            icon: const Icon(Icons.brush_outlined),
+          ),
           IconButton(
             tooltip: switch (_view) {
               FolderView.book => '바인더로 보기',
@@ -96,7 +104,9 @@ class _FolderScreenState extends State<FolderScreen> {
             listenable: store,
             builder: (context, _) {
               final tickets = store.ticketsIn(widget.folder.id);
-              if (tickets.isEmpty) return _Empty(onCreate: _create);
+              if (tickets.isEmpty) {
+                return _Empty(onCreate: _create, onDecorate: _decorate);
+              }
 
               return switch (_view) {
                 FolderView.book => _book(tickets),
@@ -111,7 +121,8 @@ class _FolderScreenState extends State<FolderScreen> {
       bottomNavigationBar: NewTicketRail(
         onPressed: _create,
         code: 'NEW',
-        hint: '${widget.folder.label} · ${store.countIn(widget.folder.id)} FILED',
+        hint:
+        '${widget.folder.label} · ${store.countIn(widget.folder.id)} FILED',
       ),
     );
   }
@@ -146,11 +157,11 @@ class _FolderScreenState extends State<FolderScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
                   child: DecoratedBox(
-                    decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
-                    child: NotebookPage(
+                    decoration:
+                    BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
+                    child: _DecoratedPage(
+                      folder: widget.folder,
                       seed: widget.folder.id.hashCode + i,
-                      eyebrow: widget.folder.subtitle,
-                      title: widget.folder.label,
                       footer:
                       'PAGE ${(i + 1).toString().padLeft(2, '0')} / ${pages.length.toString().padLeft(2, '0')}',
                       child: Column(
@@ -237,7 +248,9 @@ class _FolderScreenState extends State<FolderScreen> {
         Text(widget.folder.subtitle,
             style: AppText.display(size: 30, color: AppColors.ink)),
         const SizedBox(height: 6),
-        Text('$count장 · 길게 누르면 버릴 수 있습니다',
+        // 목록 보기에는 티켓마다 휴지통이 붙어 있어서, 길게 누르기 말고도
+        // 지울 방법이 있다는 걸 알려줍니다.
+        Text('$count장 · 목록 보기에서 하나씩 정리할 수 있습니다',
             style: AppText.data(size: 10, color: AppColors.inkSoft)),
       ],
     ),
@@ -247,8 +260,17 @@ class _FolderScreenState extends State<FolderScreen> {
 
   void _openTicket(Ticket ticket) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => TicketDetailScreen(ticketId: ticket.id),
+      ),
+    );
+  }
+
+  /// 페이지 배경 꾸미기.
+  void _decorate() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PageDecorScreen(folderId: widget.folder.id),
       ),
     );
   }
@@ -267,22 +289,29 @@ class _FolderScreenState extends State<FolderScreen> {
     );
     store.add(ticket);
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TicketDetailScreen(ticketId: id)),
+      MaterialPageRoute<void>(
+        builder: (_) => TicketDetailScreen(ticketId: id),
+      ),
     );
   }
 
-  /// 길게 누른 티켓 삭제. 상세 화면의 삭제와 같은 다이얼로그를 씁니다.
+  /// 티켓 삭제. 상세 화면의 삭제와 같은 문구를 씁니다.
+  ///
+  /// 발권 번호(AK-…)는 내부 식별자라 사람이 확인할 정보가 아닙니다.
+  /// 무엇을 지우는지 **제목으로** 묻습니다.
   Future<void> _confirmDelete(Ticket ticket) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.stockLight,
         shape: const RoundedRectangleBorder(),
-        title: Text('티켓을 버릴까요?',
+        title: Text('이 티켓을 버릴까요?',
             style: AppText.ui(size: 16, color: AppColors.ink)),
         content: Text(
-            '${ticket.title.replaceAll('\n', ' ')}\n${ticket.serial} · 복구할 수 없습니다.',
-            style: AppText.ui(size: 13, color: AppColors.inkSoft)),
+          '「${ticket.title.replaceAll('\n', ' ')}」\n'
+              '붙여둔 것들도 함께 사라지고, 되돌릴 수 없습니다.',
+          style: AppText.ui(size: 13, height: 1.6, color: AppColors.inkSoft),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -301,6 +330,54 @@ class _FolderScreenState extends State<FolderScreen> {
       ),
     );
     if (ok == true && mounted) store.remove(ticket.id);
+  }
+}
+
+/// 노트 속지 + **사용자가 꾸민 페이지 장식**.
+///
+/// 장식은 `ArchiveFolder.pageLayers`에 서류철 단위로 저장됩니다.
+/// 좌표 기준은 `PageDecorScreen`과 똑같이 **페이지 한 장 전체**라서,
+/// 꾸미기 화면에서 놓은 자리에 그대로 앉습니다.
+///
+/// 티켓보다 위에 그리지만 [PlacedLayer]가 `IgnorePointer`를 물고 있어서
+/// 탭은 아래 티켓으로 그냥 통과합니다. 스티커가 티켓을 가려도 여는 데
+/// 지장이 없습니다.
+class _DecoratedPage extends StatelessWidget {
+  const _DecoratedPage({
+    required this.folder,
+    required this.seed,
+    required this.footer,
+    required this.child,
+  });
+
+  final ArchiveFolder folder;
+  final int seed;
+  final String footer;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final canvas = Size(c.maxWidth, c.maxHeight);
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: NotebookPage(
+                seed: seed,
+                eyebrow: folder.subtitle,
+                title: folder.label,
+                footer: footer,
+                child: child,
+              ),
+            ),
+            for (final layer in folder.pageLayers)
+              PlacedLayer(layer: layer, canvas: canvas),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -354,7 +431,7 @@ class _ScrapEntry extends StatelessWidget {
             child: TapedItem(
               angle: angle,
               tapeColor: _tapes[slot % _tapes.length],
-              child: TicketFront(ticket: ticket, compact: true),
+              child: TicketCanvas(ticket: ticket, compact: true),
             ),
           ),
         );
@@ -366,7 +443,7 @@ class _ScrapEntry extends StatelessWidget {
             : [card, const SizedBox(width: 18), Expanded(child: memo)];
 
         return Padding(
-          padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+          padding: const EdgeInsets.all(6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: children,
@@ -424,9 +501,8 @@ class _Memo extends StatelessWidget {
             style: AppText.hand(
               size: 19,
               height: 1.15,
-              color: ticket.oneLiner.isEmpty
-                  ? AppColors.pulp
-                  : AppColors.oxblood,
+              color:
+              ticket.oneLiner.isEmpty ? AppColors.pulp : AppColors.oxblood,
             ),
           ),
         ),
@@ -434,7 +510,8 @@ class _Memo extends StatelessWidget {
         Row(
           children: [
             Text('★' * ticket.rating,
-                style: AppText.data(size: 9, spacing: 0.4, color: AppColors.foil)),
+                style: AppText.data(
+                    size: 9, spacing: 0.4, color: AppColors.foil)),
             if (ticket.rating > 0) const SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -515,7 +592,7 @@ class _GridCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
+        MaterialPageRoute<void>(
           builder: (_) => TicketDetailScreen(ticketId: ticket.id),
         ),
       ),
@@ -529,7 +606,7 @@ class _GridCell extends StatelessWidget {
             decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.45)),
             child: Hero(
               tag: 'ticket-${ticket.id}',
-              child: TicketFront(ticket: ticket, compact: true),
+              child: TicketCanvas(ticket: ticket, compact: true),
             ),
           ),
         ),
@@ -548,7 +625,7 @@ class _ListRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
+        MaterialPageRoute<void>(
           builder: (_) => TicketDetailScreen(ticketId: ticket.id),
         ),
       ),
@@ -581,9 +658,17 @@ class _ListRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Text('★ ${ticket.rating}',
                 style: AppText.data(size: 11, color: AppColors.foil)),
+            // 길게 누르기가 어려운 환경에서도 지울 수 있는, 눈에 보이는 길.
+            IconButton(
+              tooltip: '버리기',
+              onPressed: onDelete,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.delete_outline,
+                  size: 18, color: AppColors.pulp),
+            ),
           ],
         ),
       ),
@@ -592,8 +677,10 @@ class _ListRow extends StatelessWidget {
 }
 
 class _Empty extends StatelessWidget {
-  const _Empty({required this.onCreate});
+  const _Empty({required this.onCreate, required this.onDecorate});
+
   final VoidCallback onCreate;
+  final VoidCallback onDecorate;
 
   @override
   Widget build(BuildContext context) {
@@ -613,6 +700,12 @@ class _Empty extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             ),
             child: Text('첫 티켓 만들기', style: AppText.ui(size: 13)),
+          ),
+          const SizedBox(height: 6),
+          TextButton(
+            onPressed: onDecorate,
+            style: TextButton.styleFrom(foregroundColor: AppColors.inkSoft),
+            child: Text('빈 페이지부터 꾸미기', style: AppText.ui(size: 12)),
           ),
         ],
       ),

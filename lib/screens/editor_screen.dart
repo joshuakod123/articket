@@ -151,74 +151,81 @@ class _EditorScreenState extends State<EditorScreen> {
           body: Column(
             children: [
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final canvas = Size(c.maxWidth, c.maxHeight);
-                    return GestureDetector(
-                      // 빈 곳을 누르면 선택 해제.
-                      onTap: () => setState(() => _selectedId = null),
-                      behavior: HitTestBehavior.opaque,
-                      child: Stack(
-                        children: [
-                          const WallGrain(opacity: 0.04, seed: 17),
+                child: GestureDetector(
+                  // 빈 곳을 누르면 선택 해제.
+                  onTap: () => setState(() => _selectedId = null),
+                  behavior: HitTestBehavior.opaque,
+                  child: Stack(
+                    children: [
+                      const WallGrain(opacity: 0.04, seed: 17),
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 40, vertical: 28),
+                          child: AspectRatio(
+                            aspectRatio: ticket.frame.aspect,
+                            // 레이어의 기준 사각형을 **티켓 자신**으로 잡습니다.
+                            // 화면을 기준으로 잡으면 티켓을 뒤집거나 프레임을
+                            // 바꿨을 때 붙여둔 것만 배경에 남습니다.
+                            child: LayoutBuilder(
+                              builder: (context, c) {
+                                final canvas = Size(c.maxWidth, c.maxHeight);
+                                return Stack(
+                                  // 티켓 밖으로 조금 삐져나오는 건 자연스럽습니다.
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned.fill(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                            boxShadow: paperShadow(depth: 0.9)),
+                                        child: TicketFront(ticket: ticket),
+                                      ),
+                                    ),
+                                    for (final layer in ticket.layers)
+                                      _EditableLayer(
+                                        key: ValueKey(layer.id),
+                                        layer: layer,
+                                        canvas: canvas,
+                                        selected: _selectedId == layer.id,
+                                        onSelect: () {
+                                          setState(() => _selectedId = layer.id);
+                                          store.bringToFront(ticket.id, layer.id);
+                                        },
+                                        onScaleStart: () {
+                                          _snapshot();
+                                          _startScale = layer.scale;
+                                          _startRotation = layer.rotation;
+                                        },
+                                        onScaleUpdate: (details) {
+                                          setState(() {
+                                            layer.dx +=
+                                                details.focalPointDelta.dx / canvas.width;
+                                            layer.dy += details.focalPointDelta.dy /
+                                                canvas.height;
+                                            layer.dx = layer.dx.clamp(0.0, 1.0);
+                                            layer.dy = layer.dy.clamp(0.0, 1.0);
 
-                          // 티켓 본체 (배경, 편집 대상 아님)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 44, vertical: 24),
-                              child: AspectRatio(
-                                aspectRatio: ticket.frame.aspect,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                      boxShadow: paperShadow(depth: 0.9)),
-                                  child: TicketFront(ticket: ticket),
-                                ),
-                              ),
+                                            if (details.pointerCount > 1) {
+                                              layer.scale = (_startScale * details.scale)
+                                                  .clamp(0.3, 4.0);
+                                              layer.rotation =
+                                                  _startRotation + details.rotation;
+                                            }
+                                          });
+                                        },
+                                        onScaleEnd: _endGesture,
+                                        onDelete: () => _removeLayer(layer),
+                                        onEdit: () => _editLayer(layer),
+                                      ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
-
-                          // 편집 가능한 레이어들
-                          for (final layer in ticket.layers)
-                            _EditableLayer(
-                              key: ValueKey(layer.id),
-                              layer: layer,
-                              canvas: canvas,
-                              selected: _selectedId == layer.id,
-                              onSelect: () {
-                                setState(() => _selectedId = layer.id);
-                                store.bringToFront(ticket.id, layer.id);
-                              },
-                              onScaleStart: () {
-                                _snapshot();
-                                _startScale = layer.scale;
-                                _startRotation = layer.rotation;
-                              },
-                              onScaleUpdate: (details) {
-                                setState(() {
-                                  layer.dx +=
-                                      details.focalPointDelta.dx / canvas.width;
-                                  layer.dy += details.focalPointDelta.dy /
-                                      canvas.height;
-                                  layer.dx = layer.dx.clamp(0.0, 1.0);
-                                  layer.dy = layer.dy.clamp(0.0, 1.0);
-
-                                  if (details.pointerCount > 1) {
-                                    layer.scale = (_startScale * details.scale)
-                                        .clamp(0.3, 4.0);
-                                    layer.rotation =
-                                        _startRotation + details.rotation;
-                                  }
-                                });
-                              },
-                              onScaleEnd: _endGesture,
-                              onDelete: () => _removeLayer(layer),
-                              onEdit: () => _editLayer(layer),
-                            ),
-                        ],
+                        ),
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
               ),
 

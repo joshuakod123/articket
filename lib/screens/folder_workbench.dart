@@ -321,6 +321,7 @@ class _FolderWorkbenchState extends State<FolderWorkbench> {
                       isNew: _isNew,
                       onChanged: () => setState(() {}),
                       onSave: _save,
+                      onShred: _confirmShred,
                     ),
                   ),
                 ),
@@ -461,6 +462,7 @@ class _ToolDrawer extends StatelessWidget {
     required this.isNew,
     required this.onChanged,
     required this.onSave,
+    required this.onShred,
   });
 
   final ArchiveFolder draft;
@@ -469,6 +471,7 @@ class _ToolDrawer extends StatelessWidget {
   final bool isNew;
   final VoidCallback onChanged;
   final VoidCallback onSave;
+  final VoidCallback onShred;
 
   @override
   Widget build(BuildContext context) {
@@ -597,6 +600,23 @@ class _ToolDrawer extends StatelessWidget {
                       ),
                     ),
                   ),
+
+                  // 끌어내려 파쇄하는 동작은 손맛은 좋지만, 시뮬레이터나
+                  // 손이 불편한 경우엔 재현이 어렵습니다. 같은 결과로 가는
+                  // 평범한 버튼을 하나 더 둡니다.
+                  if (!isNew)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: TextButton.icon(
+                        onPressed: onShred,
+                        icon: const Icon(Icons.delete_outline, size: 17),
+                        label: Text('이 서류철 파쇄하기',
+                            style: AppText.ui(size: 13)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.oxblood,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
