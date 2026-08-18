@@ -7,7 +7,6 @@ import '../theme/app_text.dart';
 import '../theme/folder_style.dart';
 import 'folder_texture.dart';
 import 'paper.dart';
-import 'scrapbook.dart' show WashiTape;
 import 'ticket_card.dart';
 
 /// 서류철 카드의 세로 배치. 화면과 위젯이 같은 값을 봐야 해서 한곳에 모읍니다.
@@ -368,16 +367,12 @@ class FolderCard extends StatelessWidget {
                       child: PaperEdge(strength: 0.9),
                     ),
 
-                    // 오른쪽 위 모서리에 붙인 마스킹 테이프.
+                    // 오른쪽 위 모서리가 접혀 있습니다(dog-ear).
+                    // 테이프보다 조용하고, 종이라는 사실을 더 잘 말해줍니다.
                     Positioned(
-                      right: -14,
-                      top: tabHeight + 6,
-                      child: const WashiTape(
-                        width: 74,
-                        height: 19,
-                        color: Color(0x55F0E6CE),
-                        angle: -0.62,
-                      ),
+                      right: 0,
+                      top: tabHeight,
+                      child: _DogEar(size: 30, base: folder.color),
                     ),
 
                     // ── 포켓 뒤에서 머리를 내민 티켓들 ──────
@@ -438,9 +433,20 @@ class FolderCard extends StatelessWidget {
                               top: 0,
                               child: PaperEdge(strength: 1.0),
                             ),
-                            Positioned.fill(
+                            // 겹쳤을 때 실제로 보이는 띠(44pt) 안에 정보를 가둡니다.
+                            //
+                            // 예전에는 `Positioned.fill` + `Row`(세로 중앙정렬)이라
+                            // 글자가 포켓 전체(74pt)의 한가운데, 즉 y≈151에 앉았고,
+                            // 다음 서류철이 y=158부터 덮으면서 글자 아랫부분이
+                            // 잘려 보였습니다. 높이를 띠 크기로 못 박아 고정합니다.
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              height: FolderMetrics.pocketBand,
                               child: Padding(
-                                padding: const EdgeInsets.fromLTRB(20, 9, 18, 0),
+                                padding:
+                                const EdgeInsets.fromLTRB(20, 0, 18, 0),
                                 child: _PocketPlate(
                                   title: folder.subtitle,
                                   fileNo: _fileNoLabel,
@@ -476,6 +482,70 @@ class FolderCard extends StatelessWidget {
   }
 }
 
+/// 접힌 모서리. 뒤로 접힌 삼각형과 그 아래로 드러난 안쪽 면.
+class _DogEar extends StatelessWidget {
+  const _DogEar({required this.size, required this.base});
+
+  final double size;
+  final Color base;
+
+  @override
+  Widget build(BuildContext context) {
+    final hsl = HSLColor.fromColor(base);
+    final inner =
+    hsl.withLightness(clampDouble(hsl.lightness * 1.28 + 0.06, 0, 1))
+        .toColor();
+
+    return IgnorePointer(
+      child: CustomPaint(
+        size: Size.square(size),
+        painter: _DogEarPainter(inner: inner),
+      ),
+    );
+  }
+}
+
+class _DogEarPainter extends CustomPainter {
+  _DogEarPainter({required this.inner});
+
+  final Color inner;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // 접혀 넘어간 종이의 뒷면.
+    final flap = Path()
+      ..moveTo(w, 0)
+      ..lineTo(w, h)
+      ..lineTo(0, 0)
+      ..close();
+
+    canvas.drawPath(
+      flap,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [inner, inner.withValues(alpha: 0.75)],
+        ).createShader(Offset.zero & size),
+    );
+
+    // 접힌 선에 지는 그늘.
+    canvas.drawLine(
+      Offset(0, 0),
+      Offset(w, h),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.22)
+        ..strokeWidth = 1.2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DogEarPainter old) => old.inner != inner;
+}
+
 /// 포켓 띠에 인쇄된 정보 한 줄. 겹쳐 있어도 이 44pt 안에서 다 읽혀야 합니다.
 class _PocketPlate extends StatelessWidget {
   const _PocketPlate({
@@ -495,12 +565,23 @@ class _PocketPlate extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // 왼쪽 정리 표시. 서류철에 찍힌 도장 같은 작은 사각.
+        // 서류를 꿴 황동 리벳.
         Container(
-          width: 3,
-          height: 17,
-          margin: const EdgeInsets.only(right: 10),
-          color: onColor.withValues(alpha: 0.4),
+          width: 9,
+          height: 9,
+          margin: const EdgeInsets.only(right: 11),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFD8BE7C), Color(0xFF7A6028)],
+            ),
+            border: Border.all(
+              color: Colors.black.withValues(alpha: 0.25),
+              width: 0.7,
+            ),
+          ),
         ),
         Expanded(
           child: DebossedText(

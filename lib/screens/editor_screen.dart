@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/ticket_store.dart';
@@ -6,14 +8,24 @@ import '../models/layer.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../theme/folder_style.dart';
+import '../widgets/paper.dart';
+import '../widgets/paper_toast.dart';
+import '../widgets/scrap_layers.dart';
 import '../widgets/ticket_card.dart';
-import 'ticket_detail_screen.dart' show buildLayerContent;
+import 'record_sheet.dart';
+import 'scrap_sheets.dart';
 import 'ticket_style_sheet.dart';
 
 /// 스크랩북 에디터.
 ///
 /// 캔버스 위 레이어를 한 손가락으로 옮기고, 두 손가락으로 돌리고 키웁니다.
 /// 좌표는 캔버스 비율로 저장되어 기기 크기가 달라도 배치가 유지됩니다.
+///
+/// **되돌리기** — 붙였다가 마음에 안 들면 되돌릴 방법이 없던 게 가장 큰 문제였습니다.
+/// 이제 레이어를 건드리는 모든 동작 직전에 스냅샷을 쌓아서, 앱바의 ↩︎ / ↪︎ 로
+/// 몇 단계든 되감을 수 있습니다. 선택한 레이어는 ✕ 로 바로 뗄 수도 있고,
+/// 길게 누르면 곧장 떨어집니다.
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key, required this.ticketId});
 
@@ -26,6 +38,7 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   final store = TicketStore.instance;
   final _uuid = const Uuid();
+  final _picker = ImagePicker();
 
   String? _selectedId;
 
@@ -33,7 +46,60 @@ class _EditorScreenState extends State<EditorScreen> {
   double _startScale = 1;
   double _startRotation = 0;
 
+  /// 레이어 전체를 직렬화한 스냅샷 스택. 가볍고(문자열) 되돌리기가 정확합니다.
+  final List<String> _undo = [];
+  final List<String> _redo = [];
+  static const _maxHistory = 40;
+
   Ticket get _ticket => store.byId(widget.ticketId)!;
+
+  // ── 되돌리기 ─────────────────────────────────────
+
+  /// 레이어를 바꾸기 **직전에** 부릅니다.
+  void _snapshot() {
+    _undo.add(ScrapLayer.encodeList(_ticket.layers));
+    if (_undo.length > _maxHistory) _undo.removeAt(0);
+    _redo.clear();
+  }
+
+  void _restore(String raw) {
+    final layers = ScrapLayer.decodeList(raw);
+    _ticket.layers
+      ..clear()
+      ..addAll(layers);
+    // 사라진 레이어를 계속 선택하고 있으면 안 됩니다.
+    if (!_ticket.layers.any((l) => l.id == _selectedId)) _selectedId = null;
+    store.touch();
+  }
+
+  /// 제스처가 끝났는데 아무것도 안 바뀌었으면, 방금 쌓은 스냅샷은 버립니다.
+  /// (그냥 톡 눌러 선택만 해도 되돌리기 단계가 쌓이면 곤란합니다)
+  void _endGesture() {
+    if (_undo.isNotEmpty &&
+        _undo.last == ScrapLayer.encodeList(_ticket.layers)) {
+      _undo.removeLast();
+    }
+    store.touch();
+    setState(() {});
+  }
+
+  void _undoOnce() {
+    if (_undo.isEmpty) return;
+    HapticFeedback.selectionClick();
+    _redo.add(ScrapLayer.encodeList(_ticket.layers));
+    _restore(_undo.removeLast());
+    setState(() {});
+  }
+
+  void _redoOnce() {
+    if (_redo.isEmpty) return;
+    HapticFeedback.selectionClick();
+    _undo.add(ScrapLayer.encodeList(_ticket.layers));
+    _restore(_redo.removeLast());
+    setState(() {});
+  }
+
+  // ── 화면 ────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -45,10 +111,28 @@ class _EditorScreenState extends State<EditorScreen> {
           return const Scaffold(body: Center(child: Text('삭제된 티켓입니다')));
         }
 
+        ScrapLayer? selected;
+        for (final l in ticket.layers) {
+          if (l.id == _selectedId) selected = l;
+        }
+
         return Scaffold(
           appBar: AppBar(
             title: const Text('EDITOR'),
             actions: [
+              _HistoryButton(
+                icon: Icons.undo,
+                tooltip: '되돌리기',
+                enabled: _undo.isNotEmpty,
+                onTap: _undoOnce,
+              ),
+              _HistoryButton(
+                icon: Icons.redo,
+                tooltip: '다시 하기',
+                enabled: _redo.isNotEmpty,
+                onTap: _redoOnce,
+              ),
+              const SizedBox(width: 4),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: Text('완료',
@@ -72,6 +156,8 @@ class _EditorScreenState extends State<EditorScreen> {
                       behavior: HitTestBehavior.opaque,
                       child: Stack(
                         children: [
+                          const WallGrain(opacity: 0.04, seed: 17),
+
                           // 티켓 본체 (배경, 편집 대상 아님)
                           Center(
                             child: Padding(
@@ -79,8 +165,9 @@ class _EditorScreenState extends State<EditorScreen> {
                                   horizontal: 44, vertical: 24),
                               child: AspectRatio(
                                 aspectRatio: ticket.frame.aspect,
-                                child: Opacity(
-                                  opacity: 0.92,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                      boxShadow: paperShadow(depth: 0.9)),
                                   child: TicketFront(ticket: ticket),
                                 ),
                               ),
@@ -99,6 +186,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                 store.bringToFront(ticket.id, layer.id);
                               },
                               onScaleStart: () {
+                                _snapshot();
                                 _startScale = layer.scale;
                                 _startRotation = layer.rotation;
                               },
@@ -119,14 +207,9 @@ class _EditorScreenState extends State<EditorScreen> {
                                   }
                                 });
                               },
-                              onScaleEnd: store.touch,
-                              onDelete: () {
-                                store.removeLayer(ticket.id, layer.id);
-                                setState(() => _selectedId = null);
-                              },
-                              onEditText: layer.kind == LayerKind.text
-                                  ? () => _editText(layer)
-                                  : null,
+                              onScaleEnd: _endGesture,
+                              onDelete: () => _removeLayer(layer),
+                              onEdit: () => _editLayer(layer),
                             ),
                         ],
                       ),
@@ -134,6 +217,17 @@ class _EditorScreenState extends State<EditorScreen> {
                   },
                 ),
               ),
+
+              // 선택된 레이어를 다루는 줄. 없으면 자리를 차지하지 않습니다.
+              if (selected != null)
+                _LayerBar(
+                  layer: selected,
+                  onEdit: () => _editLayer(selected),
+                  onDuplicate: () => _duplicate(selected),
+                  onDelete: () => _removeLayer(selected),
+                  onDone: () => setState(() => _selectedId = null),
+                ),
+
               _Toolbar(
                 onFrame: () => _openStyle(0),
                 onPoster: () => _openStyle(1),
@@ -153,152 +247,164 @@ class _EditorScreenState extends State<EditorScreen> {
   // ── 레이어 추가 ───────────────────────────────────
 
   void _place(ScrapLayer layer) {
+    _snapshot();
     store.addLayer(widget.ticketId, layer);
+    HapticFeedback.lightImpact();
     setState(() => _selectedId = layer.id);
   }
 
   Future<void> _addSticker() async {
-    const glyphs = [
-      '🎟️', '🖼️', '✂️', '📎', '📌', '🕯️', '🗝️', '🎨',
-      '☕', '🌙', '⭐', '🧾', '📷', '🪞', '🍃', '✦',
-    ];
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.stockLight,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('STICKER', style: AppText.eyebrow(color: AppColors.oxblood)),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  for (final g in glyphs)
-                    InkWell(
-                      onTap: () => Navigator.pop(context, g),
-                      child: Container(
-                        width: 52,
-                        height: 52,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppColors.stock,
-                          border: Border.all(color: AppColors.line),
-                        ),
-                        child: Text(g, style: const TextStyle(fontSize: 24)),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final picked = await pickSticker(context);
     if (picked == null) return;
     _place(ScrapLayer(
       id: _uuid.v4(),
       kind: LayerKind.sticker,
-      content: picked,
+      content: picked.content,
       dx: 0.5,
       dy: 0.4,
+      color: picked.color.toARGB32(),
+      fontSize: 18,
     ));
   }
 
   Future<void> _addText() async {
-    final text = await _promptText('');
-    if (text == null || text.isEmpty) return;
+    final picked = await editScrapText(context);
+    if (picked == null) return;
     _place(ScrapLayer(
       id: _uuid.v4(),
       kind: LayerKind.text,
-      content: text,
+      content: picked.text,
       dx: 0.5,
       dy: 0.35,
-      color: AppColors.oxblood.toARGB32(),
-      fontSize: 20,
+      color: picked.color.toARGB32(),
+      fontSize: picked.size,
+      font: picked.font.name,
     ));
   }
 
-  void _addTape() {
-    const colors = [0xCC3F4A3C, 0xCC6B1F1A, 0xCC9C7C34, 0xCC2E3B4E];
-    final c = colors[_ticket.layers.length % colors.length];
+  Future<void> _addTape() async {
+    final picked = await pickTape(context);
+    if (picked == null) return;
     _place(ScrapLayer(
       id: _uuid.v4(),
       kind: LayerKind.tape,
-      content: 'tape',
-      dx: 0.3,
-      dy: 0.2,
+      content: picked.pattern.name,
+      dx: 0.34,
+      dy: 0.22,
       rotation: -0.3,
-      color: c,
+      color: picked.color.toARGB32(),
     ));
   }
 
-  void _addPhoto() {
-    // 실제 구현에서는 image_picker로 갤러리를 엽니다.
+  Future<void> _addPhoto() async {
+    String path = '';
+    try {
+      final shot = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1400,
+        imageQuality: 88,
+      );
+      path = shot?.path ?? '';
+    } catch (e) {
+      if (mounted) {
+        PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
+      }
+    }
+
+    if (!mounted) return;
     _place(ScrapLayer(
       id: _uuid.v4(),
       kind: LayerKind.photo,
-      content: '',
+      content: path,
       dx: 0.68,
       dy: 0.6,
       rotation: 0.12,
       color: AppColors.oxbloodDim.toARGB32(),
     ));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('갤러리 연동은 image_picker로 붙입니다')),
-    );
+
+    if (path.isEmpty) {
+      PaperToast.show(context, '빈 폴라로이드를 붙였습니다',
+          detail: '다시 누르면 사진을 고를 수 있습니다');
+    }
   }
 
-  Future<void> _editText(ScrapLayer layer) async {
-    final text = await _promptText(layer.content);
-    if (text == null) return;
-    setState(() => layer.content = text);
+  // ── 레이어 조작 ───────────────────────────────────
+
+  void _removeLayer(ScrapLayer layer) {
+    _snapshot();
+    store.removeLayer(widget.ticketId, layer.id);
+    HapticFeedback.mediumImpact();
+    setState(() => _selectedId = null);
+    PaperToast.show(context, '한 겹 떼어냈습니다', detail: '↩︎ 로 되돌릴 수 있습니다');
+  }
+
+  void _duplicate(ScrapLayer layer) {
+    _snapshot();
+    final copy = layer.copyWith(id: _uuid.v4())
+      ..dx = (layer.dx + 0.06).clamp(0.0, 1.0)
+      ..dy = (layer.dy + 0.06).clamp(0.0, 1.0);
+    store.addLayer(widget.ticketId, copy);
+    HapticFeedback.lightImpact();
+    setState(() => _selectedId = copy.id);
+  }
+
+  /// 레이어 종류에 맞는 시트를 열어 내용을 고칩니다.
+  Future<void> _editLayer(ScrapLayer layer) async {
+    switch (layer.kind) {
+      case LayerKind.text:
+        final picked = await editScrapText(
+          context,
+          initial: layer.content,
+          font: FolderFont.parse(layer.font),
+          color: Color(layer.color),
+          size: layer.fontSize,
+        );
+        if (picked == null) return;
+        _snapshot();
+        layer
+          ..content = picked.text
+          ..color = picked.color.toARGB32()
+          ..fontSize = picked.size
+          ..font = picked.font.name;
+
+      case LayerKind.sticker:
+        final picked = await pickSticker(context, initial: Color(layer.color));
+        if (picked == null) return;
+        _snapshot();
+        layer
+          ..content = picked.content
+          ..color = picked.color.toARGB32();
+
+      case LayerKind.tape:
+        final picked = await pickTape(
+          context,
+          pattern: TapePattern.parse(layer.content),
+          color: Color(layer.color),
+        );
+        if (picked == null) return;
+        _snapshot();
+        layer
+          ..content = picked.pattern.name
+          ..color = picked.color.toARGB32();
+
+      case LayerKind.photo:
+        try {
+          final shot = await _picker.pickImage(
+            source: ImageSource.gallery,
+            maxWidth: 1400,
+            imageQuality: 88,
+          );
+          if (shot == null) return;
+          _snapshot();
+          layer.content = shot.path;
+        } catch (e) {
+          if (mounted) PaperToast.warn(context, '사진을 불러오지 못했습니다');
+          return;
+        }
+    }
+
     store.touch();
-  }
-
-  Future<String?> _promptText(String initial) {
-    final controller = TextEditingController(text: initial);
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.stockLight,
-        shape: const RoundedRectangleBorder(),
-        title: Text('글자 넣기',
-            style: AppText.ui(size: 15, color: AppColors.ink)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          style: AppText.ui(size: 14, color: AppColors.ink),
-          decoration: InputDecoration(
-            hintText: '한 줄이든 여러 줄이든',
-            hintStyle: AppText.ui(size: 14, color: AppColors.inkSoft),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.line),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.foil),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('취소',
-                style: AppText.ui(size: 13, color: AppColors.inkSoft)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text('넣기',
-                style: AppText.ui(size: 13, color: AppColors.oxblood)),
-          ),
-        ],
-      ),
-    );
+    if (mounted) setState(() {});
   }
 
   // ── 티켓 정보 편집 ────────────────────────────────
@@ -317,14 +423,105 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  void _editInfo() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.stockLight,
-      builder: (context) => _InfoSheet(ticket: _ticket, store: store),
+  void _editInfo() =>
+      openRecordSheet(context, ticket: _ticket, store: store);
+}
+
+/// 앱바의 되돌리기 버튼. 쓸 수 없을 땐 흐려집니다.
+class _HistoryButton extends StatelessWidget {
+  const _HistoryButton({
+    required this.icon,
+    required this.tooltip,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: enabled ? onTap : null,
+      icon: Icon(
+        icon,
+        size: 20,
+        color: enabled ? AppColors.ink : AppColors.pulp,
+      ),
     );
   }
+}
+
+/// 선택한 레이어에 바로 손을 대는 줄.
+class _LayerBar extends StatelessWidget {
+  const _LayerBar({
+    required this.layer,
+    required this.onEdit,
+    required this.onDuplicate,
+    required this.onDelete,
+    required this.onDone,
+  });
+
+  final ScrapLayer layer;
+  final VoidCallback onEdit;
+  final VoidCallback onDuplicate;
+  final VoidCallback onDelete;
+  final VoidCallback onDone;
+
+  String get _name => switch (layer.kind) {
+    LayerKind.sticker => '스티커',
+    LayerKind.text => '글자',
+    LayerKind.tape => '테이프',
+    LayerKind.photo => '폴라로이드',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.stock,
+        border: Border(
+          top: BorderSide(color: AppColors.line),
+          bottom: BorderSide(color: AppColors.line),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Row(
+          children: [
+            Container(
+              width: 3,
+              height: 20,
+              margin: const EdgeInsets.only(right: 10),
+              color: AppColors.foil,
+            ),
+            Text(_name,
+                style: AppText.ui(
+                    size: 12,
+                    weight: FontWeight.w600,
+                    color: AppColors.ink)),
+            const Spacer(),
+            _act(Icons.tune, '고치기', onEdit),
+            _act(Icons.copy_all_outlined, '복제', onDuplicate),
+            _act(Icons.delete_outline, '떼어내기', onDelete,
+                color: AppColors.oxblood),
+            _act(Icons.check, '완료', onDone),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _act(IconData icon, String tip, VoidCallback onTap, {Color? color}) =>
+      IconButton(
+        tooltip: tip,
+        onPressed: onTap,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(icon, size: 19, color: color ?? AppColors.ink),
+      );
 }
 
 /// 한 손가락 = 이동, 두 손가락 = 회전 + 확대.
@@ -339,7 +536,7 @@ class _EditableLayer extends StatelessWidget {
     required this.onScaleUpdate,
     required this.onScaleEnd,
     required this.onDelete,
-    this.onEditText,
+    required this.onEdit,
   });
 
   final ScrapLayer layer;
@@ -350,7 +547,7 @@ class _EditableLayer extends StatelessWidget {
   final ValueChanged<ScaleUpdateDetails> onScaleUpdate;
   final VoidCallback onScaleEnd;
   final VoidCallback onDelete;
-  final VoidCallback? onEditText;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -363,7 +560,9 @@ class _EditableLayer extends StatelessWidget {
         translation: const Offset(-0.5, -0.5),
         child: GestureDetector(
           onTap: onSelect,
-          onDoubleTap: onEditText,
+          onDoubleTap: onEdit,
+          // 길게 누르면 바로 떨어집니다. 되돌리기가 있으니 안심하고 뗄 수 있습니다.
+          onLongPress: onDelete,
           onScaleStart: (_) {
             onSelect();
             onScaleStart();
@@ -381,35 +580,81 @@ class _EditableLayer extends StatelessWidget {
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: selected ? AppColors.foil : Colors.transparent,
+                        color: selected
+                            ? AppColors.foil.withValues(alpha: 0.9)
+                            : Colors.transparent,
                         width: 1,
                       ),
                     ),
                     child: buildLayerContent(layer),
                   ),
-                  if (selected)
+
+                  // 선택했을 때만 나오는 손잡이 두 개.
+                  if (selected) ...[
                     Positioned(
-                      right: -10,
-                      top: -10,
-                      child: GestureDetector(
+                      right: -13,
+                      top: -13,
+                      child: _Handle(
+                        icon: Icons.close,
+                        color: AppColors.oxblood,
                         onTap: onDelete,
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: const BoxDecoration(
-                            color: AppColors.oxblood,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close,
-                              size: 13, color: AppColors.stockLight),
-                        ),
                       ),
                     ),
+                    Positioned(
+                      left: -13,
+                      top: -13,
+                      child: _Handle(
+                        icon: Icons.tune,
+                        color: AppColors.ink,
+                        onTap: onEdit,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 레이어 모서리에 붙는 작고 확실한 버튼.
+class _Handle extends StatelessWidget {
+  const _Handle({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      // 작은 아이콘이라 히트 영역을 넉넉히 잡습니다.
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.stockLight, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 14, color: AppColors.stockLight),
       ),
     );
   }
@@ -436,32 +681,33 @@ class _Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stockLight,
+        color: AppColors.stock,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          // 항목이 7개라 좁은 화면에서도 넘치지 않도록 가로 스크롤로 둡니다.
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              children: [
-                _tool(Icons.crop_free, '프레임', onFrame),
-                _tool(Icons.wallpaper_outlined, '포스터', onPoster),
-                _tool(Icons.emoji_emotions_outlined, '스티커', onSticker),
-                _tool(Icons.text_fields, '글자', onText),
-                _tool(Icons.horizontal_rule, '테이프', onTape),
-                _tool(Icons.photo_outlined, '폴라로이드', onPhoto),
-                _tool(Icons.edit_note, '기록', onInfo),
-              ],
+      child: Stack(
+        children: [
+          const WallGrain(opacity: 0.05, seed: 31),
+          SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  _tool(Icons.crop_free, '프레임', onFrame),
+                  _tool(Icons.wallpaper_outlined, '포스터', onPoster),
+                  _tool(Icons.auto_awesome_outlined, '스티커', onSticker),
+                  _tool(Icons.text_fields, '글자', onText),
+                  _tool(Icons.horizontal_rule, '테이프', onTape),
+                  _tool(Icons.photo_outlined, '폴라로이드', onPhoto),
+                  _tool(Icons.edit_note, '기록', onInfo),
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -475,142 +721,9 @@ class _Toolbar extends StatelessWidget {
         children: [
           Icon(icon, size: 21, color: AppColors.ink),
           const SizedBox(height: 5),
-          Text(label,
-              style: AppText.ui(size: 10, color: AppColors.inkSoft)),
+          Text(label, style: AppText.ui(size: 10, color: AppColors.inkSoft)),
         ],
       ),
     ),
   );
-}
-
-/// 전시명 · 장소 · 별점 · 감상문을 고치는 시트.
-class _InfoSheet extends StatefulWidget {
-  const _InfoSheet({required this.ticket, required this.store});
-
-  final Ticket ticket;
-  final TicketStore store;
-
-  @override
-  State<_InfoSheet> createState() => _InfoSheetState();
-}
-
-class _InfoSheetState extends State<_InfoSheet> {
-  late final _title = TextEditingController(text: widget.ticket.title);
-  late final _venue = TextEditingController(text: widget.ticket.venue);
-  late final _oneLiner = TextEditingController(text: widget.ticket.oneLiner);
-  late final _note = TextEditingController(text: widget.ticket.note);
-  late final _companion = TextEditingController(text: widget.ticket.companion);
-  late int _rating = widget.ticket.rating;
-
-  @override
-  void dispose() {
-    _title.dispose();
-    _venue.dispose();
-    _oneLiner.dispose();
-    _note.dispose();
-    _companion.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    // pop 이후에는 이 위젯의 context가 죽으므로 미리 붙잡아 둡니다.
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    final t = widget.ticket
-      ..title = _title.text.trim()
-      ..venue = _venue.text.trim()
-      ..oneLiner = _oneLiner.text.trim()
-      ..note = _note.text.trim()
-      ..companion = _companion.text.trim()
-      ..rating = _rating;
-    widget.store.touch();
-
-    navigator.pop();
-    messenger.showSnackBar(
-      SnackBar(content: Text('${t.serial} 저장했습니다')),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('RECORD', style: AppText.eyebrow(color: AppColors.oxblood)),
-            const SizedBox(height: 18),
-            _field('전시명', _title, lines: 2),
-            _field('장소', _venue),
-            const SizedBox(height: 6),
-            Text('별점',
-                style: AppText.ui(size: 12, color: AppColors.inkSoft)),
-            const SizedBox(height: 6),
-            Row(
-              children: List.generate(
-                5,
-                    (i) => IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 38),
-                  onPressed: () => setState(() => _rating = i + 1),
-                  icon: Icon(
-                    i < _rating
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: i < _rating ? AppColors.foil : AppColors.line,
-                  ),
-                ),
-              ),
-            ),
-            _field('한 줄 평', _oneLiner),
-            _field('감상문', _note, lines: 5),
-            _field('함께한 사람', _companion),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.oxblood,
-                  foregroundColor: AppColors.stockLight,
-                  shape: const RoundedRectangleBorder(),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text('저장',
-                    style: AppText.ui(size: 14, weight: FontWeight.w600)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _field(String label, TextEditingController c, {int lines = 1}) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: TextField(
-          controller: c,
-          maxLines: lines,
-          style: AppText.ui(size: 14, color: AppColors.ink),
-          decoration: InputDecoration(
-            labelText: label,
-            labelStyle: AppText.ui(size: 12, color: AppColors.inkSoft),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.line),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.foil),
-            ),
-          ),
-        ),
-      );
 }

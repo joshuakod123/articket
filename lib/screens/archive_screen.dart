@@ -10,6 +10,7 @@ import '../widgets/folder_texture.dart';
 import '../widgets/index_tab.dart';
 import '../widgets/nav_icons.dart';
 import '../widgets/paper.dart';
+import '../widgets/paper_toast.dart';
 import 'folder_screen.dart';
 import 'folder_workbench.dart';
 import 'market_screen.dart';
@@ -329,9 +330,8 @@ class _BottomBar extends StatelessWidget {
                     );
                   }),
                   _item(context, NavSymbol.dateStamp, '캘린더', false, () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('문화 캘린더는 Phase 2에서 붙습니다')),
-                    );
+                    PaperToast.show(context, '문화 캘린더는 Phase 2에서 붙습니다',
+                        detail: 'ROADMAP · PHASE 2');
                   }),
                   _item(context, NavSymbol.pin, '내 정보', false, null),
                 ],

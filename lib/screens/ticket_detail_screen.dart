@@ -13,6 +13,10 @@ import '../widgets/paper.dart';
 import '../widgets/ticket_card.dart';
 import 'editor_screen.dart';
 import 'ticket_style_sheet.dart';
+import '../widgets/scrap_layers.dart';
+import '../widgets/paper_toast.dart';
+
+export '../widgets/scrap_layers.dart' show buildLayerContent;
 
 /// 티켓 한 장을 펼친 화면.
 /// 스크랩북 레이어 위에 3D 플립 티켓이 얹힙니다.
@@ -109,8 +113,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
               IconButton(
                 tooltip: '내보내기',
                 icon: const Icon(Icons.ios_share),
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('9:16 렌더링은 Phase 1 후반에 붙습니다')),
+                onPressed: () => PaperToast.show(
+                  context,
+                  '9:16 내보내기는 Phase 1 후반에 붙습니다',
+                  detail: 'ROADMAP · PHASE 1',
                 ),
               ),
               IconButton(
@@ -297,50 +303,6 @@ class _PlacedLayer extends StatelessWidget {
   }
 }
 
-/// 레이어 종류별 실제 그림. 에디터에서도 그대로 씁니다.
-Widget buildLayerContent(ScrapLayer layer) {
-  switch (layer.kind) {
-    case LayerKind.sticker:
-      return Text(layer.content, style: TextStyle(fontSize: layer.fontSize + 12));
-    case LayerKind.text:
-      return Text(
-        layer.content,
-        textAlign: TextAlign.center,
-        style: AppText.display(
-          size: layer.fontSize,
-          color: Color(layer.color),
-        ),
-      );
-    case LayerKind.tape:
-      return Container(
-        width: 96,
-        height: 26,
-        decoration: BoxDecoration(
-          color: Color(layer.color),
-          border: Border.symmetric(
-            vertical: BorderSide(
-              color: Colors.white.withValues(alpha: 0.18),
-              width: 2,
-            ),
-          ),
-        ),
-      );
-    case LayerKind.photo:
-    // 폴라로이드 프레임. 실제 이미지가 없으면 색 블록으로 대체합니다.
-      return Container(
-        padding: const EdgeInsets.fromLTRB(6, 6, 6, 18),
-        decoration: BoxDecoration(
-          color: AppColors.stockLight,
-          boxShadow: paperShadow(depth: 0.4),
-        ),
-        child: Container(
-          width: 84,
-          height: 84,
-          color: Color(layer.color),
-        ),
-      );
-  }
-}
 
 class _ActionBar extends StatelessWidget {
   const _ActionBar({required this.hint, required this.onDecorate});

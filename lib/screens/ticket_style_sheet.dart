@@ -7,6 +7,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/frame_shapes.dart';
 import '../widgets/poster.dart';
+import '../widgets/paper_toast.dart';
 
 /// 티켓 모양과 포스터를 고르는 시트.
 ///
@@ -61,9 +62,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('사진을 불러오지 못했습니다: $e')),
-        );
+        PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
       }
     } finally {
       if (mounted) setState(() => _picking = false);

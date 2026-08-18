@@ -12,6 +12,7 @@ import '../theme/folder_style.dart';
 import '../widgets/folder_texture.dart';
 import '../widgets/index_tab.dart';
 import '../widgets/paper.dart';
+import '../widgets/paper_toast.dart';
 
 /// 작업대를 엽니다.
 ///
@@ -128,13 +129,8 @@ class _FolderWorkbenchState extends State<FolderWorkbench> {
     final name = _name.text.trim();
     if (name.isEmpty) {
       HapticFeedback.heavyImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.ink,
-          content: Text('서류철 이름을 적어주세요',
-              style: AppText.ui(size: 13, color: AppColors.stockLight)),
-        ),
-      );
+      PaperToast.warn(context, '서류철 이름을 적어주세요',
+          detail: '탭 라벨은 비워도 자동으로 채웁니다');
       return;
     }
 

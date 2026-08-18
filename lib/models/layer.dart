@@ -19,12 +19,14 @@ class ScrapLayer {
     this.rotation = 0.0,
     this.color = 0xFFE8E2D4,
     this.fontSize = 16,
+    this.font = 'hand',
   });
 
   final String id;
   final LayerKind kind;
 
-  /// sticker → 이모지 글리프 / text → 문자열 / tape → 색상 이름 / photo → 경로
+  /// sticker → `art:star` 또는 이모지 / text → 문자열
+  /// tape → 무늬 이름(`plain`·`stripe`…) / photo → 파일 경로
   String content;
 
   double dx;
@@ -36,6 +38,10 @@ class ScrapLayer {
 
   int color;
   double fontSize;
+
+  /// 글자 레이어의 서체. `FolderFont`의 이름을 그대로 씁니다.
+  /// 인덱스가 아니라 이름으로 저장해, 나중에 서체를 끼워 넣어도 안 깨집니다.
+  String font;
 
   Offset offsetIn(Size canvas) => Offset(dx * canvas.width, dy * canvas.height);
 
@@ -49,6 +55,7 @@ class ScrapLayer {
     rotation: rotation,
     color: color,
     fontSize: fontSize,
+    font: font,
   );
 
   Map<String, dynamic> toMap() => {
@@ -61,6 +68,7 @@ class ScrapLayer {
     'rotation': rotation,
     'color': color,
     'fontSize': fontSize,
+    'font': font,
   };
 
   factory ScrapLayer.fromMap(Map<String, dynamic> m) => ScrapLayer(
@@ -76,6 +84,7 @@ class ScrapLayer {
     rotation: (m['rotation'] as num).toDouble(),
     color: m['color'] as int,
     fontSize: (m['fontSize'] as num).toDouble(),
+    font: m['font'] as String? ?? 'hand',
   );
 
   static String encodeList(List<ScrapLayer> layers) =>

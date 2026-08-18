@@ -146,7 +146,7 @@ class _FolderScreenState extends State<FolderScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
                   child: DecoratedBox(
-                    decoration: BoxDecoration(boxShadow: paperShadow(depth: .7)),
+                    decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
                     child: NotebookPage(
                       seed: widget.folder.id.hashCode + i,
                       eyebrow: widget.folder.subtitle,

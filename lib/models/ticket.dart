@@ -47,18 +47,45 @@ class PosterPalette {
   final List<Color> colors;
 
   static const presets = <PosterPalette>[
+    // 붉은 계열
     PosterPalette('심야 극장', [Color(0xFF6E1F1B), Color(0xFF2A1210)]),
+    PosterPalette('선셋', [Color(0xFFD2643A), Color(0xFF5A1E14)]),
+    PosterPalette('벽돌', [Color(0xFFA24A38), Color(0xFF3A1712)]),
+    PosterPalette('장밋빛', [Color(0xFFC98A86), Color(0xFF6B3A3A)]),
+    PosterPalette('말린 장미', [Color(0xFF8E5C5C), Color(0xFF2E1A1C)]),
+
+    // 푸른 계열
     PosterPalette('미드나잇', [Color(0xFF2E3B4E), Color(0xFF121821)]),
+    PosterPalette('청자', [Color(0xFF7FA6A0), Color(0xFF23383A)]),
+    PosterPalette('심해', [Color(0xFF1E3A44), Color(0xFF08151A)]),
+    PosterPalette('하늘 인쇄', [Color(0xFF9FB8CC), Color(0xFF41586C)]),
+    PosterPalette('군청', [Color(0xFF34406E), Color(0xFF141833)]),
+
+    // 초록 계열
     PosterPalette('올리브 아카이브', [Color(0xFF3F4A3C), Color(0xFF1A1F19)]),
+    PosterPalette('세이지', [Color(0xFF6E8B7A), Color(0xFF24312A)]),
+    PosterPalette('이끼', [Color(0xFF55603A), Color(0xFF20240F)]),
+    PosterPalette('전나무', [Color(0xFF2C4438), Color(0xFF0E1A15)]),
+
+    // 노랑·갈색 계열
     PosterPalette('황동 인쇄', [Color(0xFFB08B3E), Color(0xFF4A3417)]),
     PosterPalette('크라프트', [Color(0xFF7A5C48), Color(0xFF3A2A20)]),
+    PosterPalette('감귤', [Color(0xFFD9973A), Color(0xFF6B4413)]),
+    PosterPalette('모래', [Color(0xFFCDB68C), Color(0xFF6F5C3C)]),
+    PosterPalette('카라멜', [Color(0xFF9A6B3C), Color(0xFF3B2413)]),
+
+    // 보라 계열
     PosterPalette('자수정', [Color(0xFF3B2E5A), Color(0xFF15102A)]),
-    PosterPalette('세이지', [Color(0xFF6E8B7A), Color(0xFF24312A)]),
-    PosterPalette('뉴스프린트', [Color(0xFFC9C2B2), Color(0xFF6E6A5E)]),
     PosterPalette('라벤더 홀로', [Color(0xFFB8A9D9), Color(0xFF5A4A7A)]),
+    PosterPalette('포도', [Color(0xFF5A3A62), Color(0xFF1E1226)]),
+
+    // 무채색
     PosterPalette('잉크', [Color(0xFF3A3430), Color(0xFF0D0B0A)]),
-    PosterPalette('선셋', [Color(0xFFD2643A), Color(0xFF5A1E14)]),
-    PosterPalette('청자', [Color(0xFF7FA6A0), Color(0xFF23383A)]),
+    PosterPalette('뉴스프린트', [Color(0xFFC9C2B2), Color(0xFF6E6A5E)]),
+    PosterPalette('은염', [Color(0xFF8E8E88), Color(0xFF2B2B28)]),
+    PosterPalette('백지', [Color(0xFFF2ECDD), Color(0xFFBFB49B)]),
+    PosterPalette('먹', [Color(0xFF2A2A2A), Color(0xFF000000)]),
+    PosterPalette('석고', [Color(0xFFDCD3C0), Color(0xFF8B8272)]),
   ];
 }
 
