@@ -188,16 +188,94 @@ class HoloOverlay extends StatelessWidget {
 }
 
 /// 카드 아래 깔리는 종이 두께 그림자.
+///
 /// 라이트 배경에서는 세피아 톤을 낮은 알파로 깔아야 종이가 벽에서 떠 보입니다.
-List<BoxShadow> paperShadow({double depth = 1}) => [
-  BoxShadow(
-    color: const Color(0xFF3B2F1E).withValues(alpha: 0.18 * depth),
-    blurRadius: 22 * depth,
-    offset: Offset(0, 10 * depth),
-  ),
-  BoxShadow(
-    color: const Color(0xFF3B2F1E).withValues(alpha: 0.12),
-    blurRadius: 2,
-    offset: const Offset(0, 1),
-  ),
-];
+///
+/// ## 그림자가 두 겹인 이유
+///
+/// 종이 그림자는 하나가 아닙니다.
+///
+/// - **접촉 그림자** — 종이가 바닥에 닿는 지점 바로 밑. 좁고 진합니다.
+/// - **확산 그림자** — 넓게 퍼지는 부드러운 그늘.
+///
+/// [lift]로 종이를 들어올릴 때 이 둘이 **반대 방향으로 움직여야** 합니다.
+/// 바닥에서 떨어지니 접촉 그림자는 흐려지고 약해지고, 대신 확산 그림자가
+/// 넓고 멀어집니다. 둘 다 같이 키우면 "그림자가 커졌다"로만 보이고
+/// 들어올린 느낌이 안 납니다. 이게 동적 그림자의 핵심입니다.
+///
+/// [lift]는 0.0(바닥에 붙음) ~ 1.0(손에 들림).
+List<BoxShadow> paperShadow({double depth = 1, double lift = 0}) {
+  final l = lift.clamp(0.0, 1.0);
+
+  return [
+    // 확산 — 들수록 넓고 멀어지되, 픽셀당 농도는 옅어집니다.
+    BoxShadow(
+      color: const Color(0xFF3B2F1E)
+          .withValues(alpha: (0.18 - 0.05 * l) * depth * (1 + 0.5 * l)),
+      blurRadius: (22 + 26 * l) * depth,
+      offset: Offset(0, (10 + 14 * l) * depth),
+    ),
+    // 접촉 — 들수록 흐려지고 사라집니다.
+    BoxShadow(
+      color: const Color(0xFF3B2F1E).withValues(alpha: 0.12 * (1 - l * 0.85)),
+      blurRadius: 2 + 3 * l,
+      offset: Offset(0, 1 + l),
+    ),
+  ];
+}
+
+/// 집어 든 종이. 그림자와 크기를 함께 움직입니다.
+///
+/// 그림자만 키우면 "그림자가 커진 종이"로 보입니다. 실제로 물체가 눈에
+/// 가까워지면 **살짝 커 보여야** 합니다. 3%면 충분하고, 그 이상은 확대로 읽힙니다.
+///
+/// ```dart
+/// PaperLift(
+///   lifted: isDragging,
+///   child: TicketFront(ticket: ticket),
+/// )
+/// ```
+class PaperLift extends StatelessWidget {
+  const PaperLift({
+    super.key,
+    required this.lifted,
+    required this.child,
+    this.depth = 1.0,
+    this.borderRadius,
+    this.duration = const Duration(milliseconds: 190),
+  });
+
+  final bool lifted;
+  final Widget child;
+
+  /// 바닥에 붙어 있을 때의 그림자 세기.
+  final double depth;
+
+  /// 자식 모서리가 둥글면 넘겨주세요. 안 넘기면 직사각형 그림자입니다.
+  final BorderRadius? borderRadius;
+
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: lifted ? 1.0 : 0.0),
+      duration: duration,
+      // 종이는 튀지 않습니다. 감쇠된 곡선으로 멎습니다.
+      curve: Curves.easeOutCubic,
+      builder: (context, t, inner) {
+        return Transform.scale(
+          scale: 1 + 0.03 * t,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: borderRadius,
+              boxShadow: paperShadow(depth: depth, lift: t),
+            ),
+            child: inner,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}

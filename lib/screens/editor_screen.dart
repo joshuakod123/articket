@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
@@ -8,10 +7,12 @@ import '../models/layer.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../theme/feel.dart';
 import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scrap_layers.dart';
+import '../widgets/snap.dart';
 import '../widgets/ticket_card.dart';
 import 'record_sheet.dart';
 import 'scrap_sheets.dart';
@@ -45,6 +46,15 @@ class _EditorScreenState extends State<EditorScreen> {
   // 제스처 시작 시점의 값을 붙잡아 둡니다.
   double _startScale = 1;
   double _startRotation = 0;
+
+  /// 지금 끌고 있는 레이어. 들어올림 그림자를 이 아이에게만 겁니다.
+  String? _draggingId;
+
+  /// 회전·자리·크기 눈금.
+  final _snap = SnapEngine();
+
+  /// 지금 걸려 있는 눈금. 가이드선을 그릴 때 씁니다.
+  Set<SnapAxis> _guides = const <SnapAxis>{};
 
   /// 레이어 전체를 직렬화한 스냅샷 스택. 가볍고(문자열) 되돌리기가 정확합니다.
   final List<String> _undo = [];
@@ -85,7 +95,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _undoOnce() {
     if (_undo.isEmpty) return;
-    HapticFeedback.selectionClick();
+    Feel.pick();
     _redo.add(ScrapLayer.encodeList(_ticket.layers));
     _restore(_undo.removeLast());
     setState(() {});
@@ -93,7 +103,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _redoOnce() {
     if (_redo.isEmpty) return;
-    HapticFeedback.selectionClick();
+    Feel.pick();
     _undo.add(ScrapLayer.encodeList(_ticket.layers));
     _restore(_redo.removeLast());
     setState(() {});
@@ -136,6 +146,22 @@ class _EditorScreenState extends State<EditorScreen> {
                 enabled: _redo.isNotEmpty,
                 onTap: _redoOnce,
               ),
+              // 눈금을 끄면 완전 자유각이 됩니다. 정밀 배치를 원하는
+              // 사용자를 위한 탈출구입니다.
+              _HistoryButton(
+                icon: _snap.enabled
+                    ? Icons.grid_on
+                    : Icons.grid_off,
+                tooltip: _snap.enabled ? '눈금 끄기' : '눈금 켜기',
+                enabled: true,
+                onTap: () {
+                  Feel.pick();
+                  setState(() {
+                    _snap.enabled = !_snap.enabled;
+                    _guides = const <SnapAxis>{};
+                  });
+                },
+              ),
               const SizedBox(width: 4),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -174,13 +200,22 @@ class _EditorScreenState extends State<EditorScreen> {
                                   // 티켓 밖으로 조금 삐져나오는 건 자연스럽습니다.
                                   clipBehavior: Clip.none,
                                   children: [
+                                    // 레이어를 집어 들면 티켓 자체도 살짝
+                                    // 가라앉습니다. 들린 건 레이어지 티켓이
+                                    // 아니라는 걸 그림자 대비로 알립니다.
                                     Positioned.fill(
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                            boxShadow: paperShadow(depth: 0.9)),
+                                      child: PaperLift(
+                                        lifted: false,
+                                        depth: _draggingId == null ? 0.9 : 0.6,
                                         child: TicketFront(ticket: ticket),
                                       ),
                                     ),
+                                    // 눈금에 걸린 축만 실선으로 비칩니다.
+                                    if (_guides.isNotEmpty)
+                                      Positioned.fill(
+                                        child: SnapGuides(engaged: _guides),
+                                      ),
+
                                     for (final layer in ticket.layers)
                                       _EditableLayer(
                                         key: ValueKey(layer.id),
@@ -191,29 +226,74 @@ class _EditorScreenState extends State<EditorScreen> {
                                           setState(() => _selectedId = layer.id);
                                           store.bringToFront(ticket.id, layer.id);
                                         },
+                                        dragging: _draggingId == layer.id,
                                         onScaleStart: () {
                                           _snapshot();
+                                          _snap.begin();
                                           _startScale = layer.scale;
                                           _startRotation = layer.rotation;
+                                          Feel.lift();
+                                          setState(
+                                                  () => _draggingId = layer.id);
                                         },
                                         onScaleUpdate: (details) {
-                                          setState(() {
-                                            layer.dx +=
-                                                details.focalPointDelta.dx / canvas.width;
-                                            layer.dy += details.focalPointDelta.dy /
-                                                canvas.height;
-                                            layer.dx = layer.dx.clamp(0.0, 1.0);
-                                            layer.dy = layer.dy.clamp(0.0, 1.0);
+                                          // 1) 손가락이 민 만큼 날것으로 옮깁니다.
+                                          final rawX = (layer.dx +
+                                              details.focalPointDelta.dx /
+                                                  canvas.width)
+                                              .clamp(0.0, 1.0);
+                                          final rawY = (layer.dy +
+                                              details.focalPointDelta.dy /
+                                                  canvas.height)
+                                              .clamp(0.0, 1.0);
 
-                                            if (details.pointerCount > 1) {
-                                              layer.scale = (_startScale * details.scale)
-                                                  .clamp(0.3, 4.0);
-                                              layer.rotation =
-                                                  _startRotation + details.rotation;
-                                            }
+                                          var rawScale = layer.scale;
+                                          var rawRotation = layer.rotation;
+                                          final twoFinger =
+                                              details.pointerCount > 1;
+
+                                          if (twoFinger) {
+                                            rawScale =
+                                                (_startScale * details.scale)
+                                                    .clamp(0.3, 4.0);
+                                            rawRotation = _startRotation +
+                                                details.rotation;
+                                          }
+
+                                          // 2) 눈금에 붙입니다. 형제 레이어의
+                                          //    배율을 넘겨, 옆 것과 같은 크기에도 걸리게.
+                                          final snapped = _snap.apply(
+                                            dx: rawX,
+                                            dy: rawY,
+                                            rotation: rawRotation,
+                                            scale: rawScale,
+                                            scaleGuides: [
+                                              for (final l in ticket.layers)
+                                                if (l.id != layer.id) l.scale
+                                            ],
+                                            snapRotation: twoFinger,
+                                            snapScale: twoFinger,
+                                          );
+
+                                          // 3) 눈금에 **새로** 들어간 순간에만 울립니다.
+                                          if (snapped.justEngaged) Feel.snap();
+
+                                          setState(() {
+                                            _guides = snapped.engaged;
+                                            layer.dx = snapped.dx;
+                                            layer.dy = snapped.dy;
+                                            layer.scale = snapped.scale;
+                                            layer.rotation = snapped.rotation;
                                           });
                                         },
-                                        onScaleEnd: _endGesture,
+                                        onScaleEnd: () {
+                                          _snap.end();
+                                          setState(() {
+                                            _draggingId = null;
+                                            _guides = const <SnapAxis>{};
+                                          });
+                                          _endGesture();
+                                        },
                                         onDelete: () => _removeLayer(layer),
                                         onEdit: () => _editLayer(layer),
                                       ),
@@ -260,7 +340,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void _place(ScrapLayer layer) {
     _snapshot();
     store.addLayer(widget.ticketId, layer);
-    HapticFeedback.lightImpact();
+    Feel.place();
     setState(() => _selectedId = layer.id);
   }
 
@@ -344,7 +424,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void _removeLayer(ScrapLayer layer) {
     _snapshot();
     store.removeLayer(widget.ticketId, layer.id);
-    HapticFeedback.mediumImpact();
+    Feel.stamp();
     setState(() => _selectedId = null);
     PaperToast.show(context, '한 겹 떼어냈습니다', detail: '↩︎ 로 되돌릴 수 있습니다');
   }
@@ -355,7 +435,7 @@ class _EditorScreenState extends State<EditorScreen> {
       ..dx = (layer.dx + 0.06).clamp(0.0, 1.0)
       ..dy = (layer.dy + 0.06).clamp(0.0, 1.0);
     store.addLayer(widget.ticketId, copy);
-    HapticFeedback.lightImpact();
+    Feel.lift();
     setState(() => _selectedId = copy.id);
   }
 
@@ -542,6 +622,7 @@ class _EditableLayer extends StatelessWidget {
     required this.layer,
     required this.canvas,
     required this.selected,
+    required this.dragging,
     required this.onSelect,
     required this.onScaleStart,
     required this.onScaleUpdate,
@@ -553,6 +634,10 @@ class _EditableLayer extends StatelessWidget {
   final ScrapLayer layer;
   final Size canvas;
   final bool selected;
+
+  /// 지금 손에 들려 있는지. 그림자와 크기가 여기에 반응합니다.
+  final bool dragging;
+
   final VoidCallback onSelect;
   final VoidCallback onScaleStart;
   final ValueChanged<ScaleUpdateDetails> onScaleUpdate;
@@ -583,7 +668,8 @@ class _EditableLayer extends StatelessWidget {
           child: Transform.rotate(
             angle: layer.rotation,
             child: Transform.scale(
-              scale: layer.scale,
+              // 들어올리면 3%만 커집니다. 그 이상은 확대로 읽힙니다.
+              scale: layer.scale * (dragging ? 1.03 : 1.0),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [

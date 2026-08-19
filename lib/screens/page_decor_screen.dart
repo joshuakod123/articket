@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
@@ -10,12 +9,15 @@ import '../models/layer.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../theme/feel.dart';
 import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scrap_layers.dart';
 import '../widgets/scrap_page.dart';
 import '../widgets/scrapbook.dart';
+import '../widgets/snap.dart';
+import '../widgets/spring.dart';
 import '../widgets/ticket_canvas.dart';
 import 'scrap_sheets.dart';
 
@@ -39,7 +41,8 @@ class PageDecorScreen extends StatefulWidget {
   State<PageDecorScreen> createState() => _PageDecorScreenState();
 }
 
-class _PageDecorScreenState extends State<PageDecorScreen> {
+class _PageDecorScreenState extends State<PageDecorScreen>
+    with TickerProviderStateMixin {
   final store = TicketStore.instance;
   final _uuid = const Uuid();
   final _picker = ImagePicker();
@@ -47,11 +50,29 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
   /// 지금 고른 것. 레이어면 layer:<id>, 티켓이면 ticket:<id>.
   String? _selected;
 
+  /// 지금 손에 들려 있는 것. 그림자와 크기가 여기에 반응합니다.
+  String? _dragging;
+
+  /// 회전·자리·크기 눈금.
+  final _snap = SnapEngine();
+
+  /// 지금 걸려 있는 축. 가이드선용.
+  Set<SnapAxis> _guides = const <SnapAxis>{};
+
+  /// 던진 티켓이 속도를 이어받아 멎게 합니다.
+  late final SpringSettle _settle = SpringSettle(vsync: this);
+
   double _startScale = 1;
   double _startRotation = 0;
 
   final List<String> _undo = [];
   final List<String> _redo = [];
+
+  @override
+  void dispose() {
+    _settle.dispose();
+    super.dispose();
+  }
 
   ArchiveFolder? get _folder => store.folderById(widget.folderId);
 
@@ -99,7 +120,7 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
 
   void _undoOnce() {
     if (_undo.isEmpty) return;
-    HapticFeedback.selectionClick();
+    Feel.pick();
     _redo.add(_stateString());
     _restore(_undo.removeLast());
     setState(() {});
@@ -107,7 +128,7 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
 
   void _redoOnce() {
     if (_redo.isEmpty) return;
-    HapticFeedback.selectionClick();
+    Feel.pick();
     _undo.add(_stateString());
     _restore(_redo.removeLast());
     setState(() {});
@@ -168,7 +189,7 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
     _snapshot();
     _layers.add(layer);
     store.touch();
-    HapticFeedback.lightImpact();
+    Feel.place();
     setState(() => _selected = 'layer:${layer.id}');
   }
 
@@ -243,7 +264,7 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
     _snapshot();
     _layers.removeWhere((l) => l.id == layer.id);
     store.touch();
-    HapticFeedback.mediumImpact();
+    Feel.tear();
     setState(() => _selected = null);
     PaperToast.show(context, '한 겹 떼어냈습니다', detail: '↩︎ 로 되돌릴 수 있습니다');
   }
@@ -399,6 +420,12 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
                                 ),
                               ),
 
+                              // ── 눈금 안내선 ────────────────
+                              if (_guides.isNotEmpty)
+                                Positioned.fill(
+                                  child: SnapGuides(engaged: _guides),
+                                ),
+
                               // ── 자유 배치 티켓 ─────────────
                               if (folder.freeLayout)
                                 for (var i = 0; i < tickets.length; i++)
@@ -411,29 +438,88 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
                                     _selected == 'ticket:${tickets[i].id}',
                                     onSelect: () => setState(() =>
                                     _selected = 'ticket:${tickets[i].id}'),
+                                    dragging: _dragging ==
+                                        'ticket:${tickets[i].id}',
                                     onStart: () {
+                                      _settle.stop();
                                       _snapshot();
+                                      _snap.begin();
                                       _startScale = tickets[i].pscale;
                                       _startRotation = tickets[i].protation;
+                                      Feel.lift();
+                                      setState(() => _dragging =
+                                      'ticket:${tickets[i].id}');
                                     },
-                                    onUpdate: (d) => setState(() {
+                                    onUpdate: (d) {
                                       final t = tickets[i];
-                                      t.px = ((t.px ?? 0.5) +
+                                      final twoFinger = d.pointerCount > 1;
+
+                                      final rawX = ((t.px ?? 0.5) +
                                           d.focalPointDelta.dx /
                                               canvas.width)
                                           .clamp(0.05, 0.95);
-                                      t.py = ((t.py ?? 0.5) +
+                                      final rawY = ((t.py ?? 0.5) +
                                           d.focalPointDelta.dy /
                                               canvas.height)
                                           .clamp(0.05, 0.95);
-                                      if (d.pointerCount > 1) {
-                                        t.pscale = (_startScale * d.scale)
-                                            .clamp(0.45, 2.2);
-                                        t.protation =
-                                            _startRotation + d.rotation;
-                                      }
-                                    }),
-                                    onEnd: _endGesture,
+
+                                      final rawScale = twoFinger
+                                          ? (_startScale * d.scale)
+                                          .clamp(0.45, 2.2)
+                                          : t.pscale;
+                                      final rawRotation = twoFinger
+                                          ? _startRotation + d.rotation
+                                          : t.protation;
+
+                                      final snapped = _snap.apply(
+                                        dx: rawX,
+                                        dy: rawY,
+                                        rotation: rawRotation,
+                                        scale: rawScale,
+                                        xGuides: SnapEngine.kPageGuides,
+                                        yGuides: SnapEngine.kPageGuides,
+                                        scaleGuides: [
+                                          for (final o in tickets)
+                                            if (o.id != t.id) o.pscale
+                                        ],
+                                        snapRotation: twoFinger,
+                                        snapScale: twoFinger,
+                                      );
+
+                                      if (snapped.justEngaged) Feel.snap();
+
+                                      setState(() {
+                                        _guides = snapped.engaged;
+                                        t.px = snapped.dx;
+                                        t.py = snapped.dy;
+                                        t.pscale = snapped.scale;
+                                        t.protation = snapped.rotation;
+                                      });
+                                    },
+                                    // 놓은 속도를 이어받아 미끄러져 멎습니다.
+                                    // 여기가 이 앱에서 스프링을 쓰는 유일한 자리입니다.
+                                    onEnd: (velocity) {
+                                      final t = tickets[i];
+                                      _snap.end();
+                                      setState(() {
+                                        _dragging = null;
+                                        _guides = const <SnapAxis>{};
+                                      });
+                                      _settle.fling(
+                                        from: Offset(t.px ?? 0.5, t.py ?? 0.5),
+                                        velocity: Offset(
+                                          velocity.dx / canvas.width,
+                                          velocity.dy / canvas.height,
+                                        ),
+                                        bounds: const Rect.fromLTRB(
+                                            0.05, 0.05, 0.95, 0.95),
+                                        onUpdate: (at) => setState(() {
+                                          t.px = at.dx;
+                                          t.py = at.dy;
+                                        }),
+                                        onSettled: _endGesture,
+                                      );
+                                    },
                                   ),
 
                               // ── 장식 레이어 ────────────────
@@ -451,26 +537,67 @@ class _PageDecorScreenState extends State<PageDecorScreen> {
                                       ..add(layer);
                                     store.touch();
                                   },
+                                  dragging:
+                                  _dragging == 'layer:${layer.id}',
                                   onScaleStart: () {
                                     _snapshot();
+                                    _snap.begin();
                                     _startScale = layer.scale;
                                     _startRotation = layer.rotation;
+                                    Feel.lift();
+                                    setState(() =>
+                                    _dragging = 'layer:${layer.id}');
                                   },
-                                  onScaleUpdate: (d) => setState(() {
-                                    layer.dx =
-                                        (layer.dx + d.focalPointDelta.dx / canvas.width)
-                                            .clamp(0.0, 1.0);
-                                    layer.dy =
-                                        (layer.dy + d.focalPointDelta.dy / canvas.height)
-                                            .clamp(0.0, 1.0);
-                                    if (d.pointerCount > 1) {
-                                      layer.scale = (_startScale * d.scale)
-                                          .clamp(0.3, 4.0);
-                                      layer.rotation =
-                                          _startRotation + d.rotation;
-                                    }
-                                  }),
-                                  onScaleEnd: _endGesture,
+                                  onScaleUpdate: (d) {
+                                    final twoFinger = d.pointerCount > 1;
+
+                                    final rawX = (layer.dx +
+                                        d.focalPointDelta.dx / canvas.width)
+                                        .clamp(0.0, 1.0);
+                                    final rawY = (layer.dy +
+                                        d.focalPointDelta.dy / canvas.height)
+                                        .clamp(0.0, 1.0);
+                                    final rawScale = twoFinger
+                                        ? (_startScale * d.scale)
+                                        .clamp(0.3, 4.0)
+                                        : layer.scale;
+                                    final rawRotation = twoFinger
+                                        ? _startRotation + d.rotation
+                                        : layer.rotation;
+
+                                    final snapped = _snap.apply(
+                                      dx: rawX,
+                                      dy: rawY,
+                                      rotation: rawRotation,
+                                      scale: rawScale,
+                                      xGuides: SnapEngine.kPageGuides,
+                                      yGuides: SnapEngine.kPageGuides,
+                                      scaleGuides: [
+                                        for (final o in folder.pageLayers)
+                                          if (o.id != layer.id) o.scale
+                                      ],
+                                      snapRotation: twoFinger,
+                                      snapScale: twoFinger,
+                                    );
+
+                                    if (snapped.justEngaged) Feel.snap();
+
+                                    setState(() {
+                                      _guides = snapped.engaged;
+                                      layer.dx = snapped.dx;
+                                      layer.dy = snapped.dy;
+                                      layer.scale = snapped.scale;
+                                      layer.rotation = snapped.rotation;
+                                    });
+                                  },
+                                  onScaleEnd: () {
+                                    _snap.end();
+                                    setState(() {
+                                      _dragging = null;
+                                      _guides = const <SnapAxis>{};
+                                    });
+                                    _endGesture();
+                                  },
                                   onDelete: () => _remove(layer),
                                   onEdit: () => _edit(layer),
                                 ),
@@ -619,6 +746,7 @@ class _FreeTicket extends StatelessWidget {
     required this.canvas,
     required this.selected,
     required this.onSelect,
+    required this.dragging,
     required this.onStart,
     required this.onUpdate,
     required this.onEnd,
@@ -629,9 +757,15 @@ class _FreeTicket extends StatelessWidget {
   final Size canvas;
   final bool selected;
   final VoidCallback onSelect;
+
+  /// 지금 손에 들려 있는지.
+  final bool dragging;
+
   final VoidCallback onStart;
   final ValueChanged<ScaleUpdateDetails> onUpdate;
-  final VoidCallback onEnd;
+
+  /// 놓는 순간의 속도(픽셀/초)를 넘깁니다. 스프링이 이걸 이어받습니다.
+  final ValueChanged<Offset> onEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -652,23 +786,28 @@ class _FreeTicket extends StatelessWidget {
             onStart();
           },
           onScaleUpdate: onUpdate,
-          onScaleEnd: (_) => onEnd(),
+          onScaleEnd: (d) => onEnd(d.velocity.pixelsPerSecond),
           child: Transform.rotate(
             angle: ticket.protation,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: selected
-                      ? AppColors.foil.withValues(alpha: 0.9)
-                      : Colors.transparent,
+            // 들어올리면 3%만. 그림자는 TapedTicket 안쪽이 이미 갖고 있어서
+            // 여기서는 크기만 건드립니다.
+            child: Transform.scale(
+              scale: dragging ? 1.03 : 1.0,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.foil.withValues(alpha: 0.9)
+                        : Colors.transparent,
+                  ),
                 ),
-              ),
-              child: TapedTicket(
-                ticket: ticket,
-                width: width,
-                angle: 0,
-                tapeColor: scrapTapes[index % scrapTapes.length],
+                child: TapedTicket(
+                  ticket: ticket,
+                  width: width,
+                  angle: 0,
+                  tapeColor: scrapTapes[index % scrapTapes.length],
+                ),
               ),
             ),
           ),
@@ -685,6 +824,7 @@ class _Editable extends StatelessWidget {
     required this.layer,
     required this.canvas,
     required this.selected,
+    required this.dragging,
     required this.onSelect,
     required this.onScaleStart,
     required this.onScaleUpdate,
@@ -696,6 +836,10 @@ class _Editable extends StatelessWidget {
   final ScrapLayer layer;
   final Size canvas;
   final bool selected;
+
+  /// 지금 손에 들려 있는지.
+  final bool dragging;
+
   final VoidCallback onSelect;
   final VoidCallback onScaleStart;
   final ValueChanged<ScaleUpdateDetails> onScaleUpdate;
@@ -725,7 +869,7 @@ class _Editable extends StatelessWidget {
           child: Transform.rotate(
             angle: layer.rotation,
             child: Transform.scale(
-              scale: layer.scale,
+              scale: layer.scale * (dragging ? 1.03 : 1.0),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
