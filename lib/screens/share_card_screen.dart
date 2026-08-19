@@ -7,6 +7,7 @@ import '../theme/folder_style.dart';
 import '../widgets/folder_texture.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
+import '../widgets/scaled_canvas.dart';
 import '../widgets/scrapbook.dart' show WashiTape;
 
 /// 공유 카드 용지.
@@ -92,6 +93,15 @@ class ShareCardScreen extends StatefulWidget {
 }
 
 class _ShareCardScreenState extends State<ShareCardScreen> {
+  /// 카드의 **설계 크기**. 9:16 이고, 안쪽 글자·여백은 전부 이 크기 기준입니다.
+  ///
+  /// 화면 크기에 따라 다시 흐르게 두면 기기마다 다른 그림이 나옵니다.
+  /// 여기서 한 번 못 박고, 보여줄 때만 균일 배율로 줄입니다.
+  static const Size _design = Size(360, 640);
+
+  /// 내보낼 이미지의 가로 픽셀. 인스타그램 스토리 기준 1080×1920.
+  static const double _exportWidth = 1080;
+
   final _boundary = GlobalKey();
 
   ShareStock _stock = ShareStock.cream;
@@ -110,6 +120,8 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
         _boundary,
         name: widget.fileName,
         text: widget.shareText,
+        // 화면에 그려진 크기와 무관하게 늘 1080×1920 으로 뜹니다.
+        targetWidth: _exportWidth,
       );
     } catch (e) {
       if (mounted) PaperToast.warn(context, '공유하지 못했습니다', detail: '$e');
@@ -139,14 +151,17 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
                     // 이 경계 안쪽만 이미지로 떠집니다.
                     child: RepaintBoundary(
                       key: _boundary,
-                      child: _Card(
-                        stock: _stock,
-                        grain: _grain,
-                        trim: _trim,
-                        artwork: widget.artwork,
-                        title: widget.title,
-                        subtitle: widget.subtitle,
-                        meta: widget.meta,
+                      child: ScaledCanvas(
+                        design: _design,
+                        child: _Card(
+                          stock: _stock,
+                          grain: _grain,
+                          trim: _trim,
+                          artwork: widget.artwork,
+                          title: widget.title,
+                          subtitle: widget.subtitle,
+                          meta: widget.meta,
+                        ),
                       ),
                     ),
                   ),

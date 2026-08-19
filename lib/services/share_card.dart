@@ -23,8 +23,14 @@ class ShareCard {
         String name = 'articket',
         String? text,
         double pixelRatio = 3,
+        double? targetWidth,
       }) async {
-    final file = await captureToFile(key, name: name, pixelRatio: pixelRatio);
+    final file = await captureToFile(
+      key,
+      name: name,
+      pixelRatio: pixelRatio,
+      targetWidth: targetWidth,
+    );
     if (file == null) return;
 
     await SharePlus.instance.share(
@@ -33,10 +39,14 @@ class ShareCard {
   }
 
   /// 이미지만 파일로 떠서 돌려줍니다. (공유 시트는 열지 않습니다)
+  /// [targetWidth]를 주면 **화면에 그려진 크기와 상관없이** 그 가로 픽셀로
+  /// 떠냅니다. 작은 폰이든 태블릿이든 결과 이미지가 항상 같은 해상도라
+  /// 인스타그램에 올렸을 때 화질이 들쭉날쭉하지 않습니다.
   static Future<File?> captureToFile(
       GlobalKey key, {
         String name = 'articket',
         double pixelRatio = 3,
+        double? targetWidth,
       }) async {
     final object = key.currentContext?.findRenderObject();
     if (object is! RenderRepaintBoundary) return null;
@@ -46,7 +56,12 @@ class ShareCard {
       await Future<void>.delayed(const Duration(milliseconds: 40));
     }
 
-    final image = await object.toImage(pixelRatio: pixelRatio);
+    var ratio = pixelRatio;
+    if (targetWidth != null && object.hasSize && object.size.width > 0) {
+      ratio = (targetWidth / object.size.width).clamp(1.0, 8.0);
+    }
+
+    final image = await object.toImage(pixelRatio: ratio);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     if (bytes == null) return null;

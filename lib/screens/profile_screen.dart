@@ -396,57 +396,121 @@ class _MemberPlate extends StatelessWidget {
     );
   }
 
+  /// 이름 고치기.
+  ///
+  /// ## 왜 여기서 앱이 죽었나 (`_dependents.isEmpty` 어서션)
+  ///
+  /// 예전 코드는 이랬습니다.
+  ///
+  /// ```dart
+  /// final controller = TextEditingController(...);
+  /// final result = await showDialog(...);
+  /// controller.dispose();          // ← 여기
+  /// ```
+  ///
+  /// `showDialog` 의 `await` 는 **`Navigator.pop` 이 불린 순간** 풀립니다.
+  /// 그런데 다이얼로그는 그때 아직 화면에 있습니다. 닫히는 애니메이션이
+  /// 150ms 남아 있고, 그동안 `TextField`(정확히는 `EditableText`)는 살아서
+  /// 이 컨트롤러를 계속 듣고 있습니다.
+  ///
+  /// 즉 **살아 있는 위젯이 쓰는 컨트롤러를 먼저 죽인** 것입니다. 사라지는
+  /// 도중의 `EditableText` 가 폐기된 컨트롤러를 건드리며 예외를 던지고,
+  /// 그 예외 때문에 엘리먼트 트리의 `deactivate` 순회가 중간에 끊깁니다.
+  /// 그러면 위쪽 `InheritedElement`(Theme·MediaQuery 등)는 아직 자기를
+  /// 구독 중인 자손을 남긴 채 비활성화되고, 프레임워크가 그걸 잡아
+  /// `framework.dart` 의 `assert(_dependents.isEmpty)` 로 터집니다.
+  /// 화면을 덮은 빨간 에러는 그 **2차 증상**이었습니다.
+  ///
+  /// 그래서 컨트롤러의 수명을 다이얼로그 자신에게 넘깁니다.
+  /// `State.dispose()` 는 위젯이 트리에서 완전히 빠진 뒤에 불리므로,
+  /// "쓰는 쪽보다 먼저 죽는" 일이 구조적으로 불가능해집니다.
+  /// (이 프로젝트의 다른 컨트롤러들은 이미 전부 이 방식입니다.)
   Future<void> _rename(BuildContext context) async {
-    final controller = TextEditingController(text: viewerName.value);
-
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.stockLight,
-        surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(),
-        title: Text('뭐라고 부를까요',
-            style: AppText.display(size: 18, color: AppColors.ink)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 14,
-          textInputAction: TextInputAction.done,
-          style: AppText.ui(size: 15, color: AppColors.ink),
-          cursorColor: AppColors.oxblood,
-          decoration: InputDecoration(
-            counterText: '',
-            hintText: '이름 없는 관람자',
-            hintStyle: AppText.ui(size: 15, color: AppColors.pulp),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.line),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.oxblood, width: 1.4),
-            ),
-          ),
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('그대로',
-                style: AppText.ui(size: 13, color: AppColors.inkSoft)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('바꾸기',
-                style: AppText.ui(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    color: AppColors.oxblood)),
-          ),
-        ],
-      ),
+      builder: (_) => _NameDialog(initial: viewerName.value),
     );
 
-    controller.dispose();
-    if (result != null && result.isNotEmpty) viewerName.value = result;
+    if (result == null) return;
+    final name = result.trim();
+    if (name.isEmpty) return;
+    viewerName.value = name;
+  }
+}
+
+/// 이름을 묻는 작은 다이얼로그.
+///
+/// 컨트롤러를 **자기가 만들고 자기가 버립니다.** 이게 핵심입니다.
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final TextEditingController _controller =
+  TextEditingController(text: widget.initial)
+    ..selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: widget.initial.length,
+    );
+
+  @override
+  void dispose() {
+    // 다이얼로그가 트리에서 완전히 빠진 뒤에 불립니다. 안전합니다.
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.of(context).pop(_controller.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.stockLight,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(),
+      title: Text('뭐라고 부를까요',
+          style: AppText.display(size: 18, color: AppColors.ink)),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 14,
+        textInputAction: TextInputAction.done,
+        style: AppText.ui(size: 15, color: AppColors.ink),
+        cursorColor: AppColors.oxblood,
+        decoration: InputDecoration(
+          counterText: '',
+          hintText: '이름 없는 관람자',
+          hintStyle: AppText.ui(size: 15, color: AppColors.pulp),
+          enabledBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: AppColors.line),
+          ),
+          focusedBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: AppColors.oxblood, width: 1.4),
+          ),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('그대로',
+              style: AppText.ui(size: 13, color: AppColors.inkSoft)),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: Text('바꾸기',
+              style: AppText.ui(
+                  size: 13,
+                  weight: FontWeight.w600,
+                  color: AppColors.oxblood)),
+        ),
+      ],
+    );
   }
 }
 

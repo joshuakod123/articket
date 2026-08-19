@@ -78,32 +78,38 @@ class ScrapMemo extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 5),
-        Flexible(
-          child: Text(
-            ticket.title.replaceAll('\n', ' '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.ui(
-                size: 13.5,
-                weight: FontWeight.w700,
-                height: 1.25,
-                color: AppColors.ink),
-          ),
+        // Flexible 을 걷어냈습니다.
+        //
+        // 예전에는 이 둘이 Flexible 이었습니다. 부모(Column)에 남은 높이가
+        // 모자라면 Flexible 은 자식에게 "너한테 줄 높이는 0" 이라고 통보하는데,
+        // Text 는 그래도 제 높이대로 그려집니다. 결과적으로 **다음 형제(밑줄·
+        // 한 줄 평)가 제목 위에 겹쳐 찍혔습니다.** 공유 카드에서 "Hiroshi
+        // Yoshida Woodblock" 아래가 잘려 보이던 게 이것입니다.
+        //
+        // 이제 메모는 항상 자연 높이를 갖고, 자리가 좁으면 [AutoScrapEntry] 가
+        // 메모 전체를 균일 배율로 줄입니다. 겹칠 일이 없습니다.
+        Text(
+          ticket.title.replaceAll('\n', ' '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.ui(
+              size: 13.5,
+              weight: FontWeight.w700,
+              height: 1.25,
+              color: AppColors.ink),
         ),
         const SizedBox(height: 3),
         const DoodleUnderline(width: 74),
         const SizedBox(height: 7),
-        Flexible(
-          child: Text(
-            ticket.oneLiner.isEmpty ? '아직 아무 말도 적지 않았다.' : ticket.oneLiner,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.hand(
-              size: 19,
-              height: 1.15,
-              color:
-              ticket.oneLiner.isEmpty ? AppColors.pulp : AppColors.oxblood,
-            ),
+        Text(
+          ticket.oneLiner.isEmpty ? '아직 아무 말도 적지 않았다.' : ticket.oneLiner,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.hand(
+            size: 19,
+            height: 1.15,
+            color:
+            ticket.oneLiner.isEmpty ? AppColors.pulp : AppColors.oxblood,
           ),
         ),
         const SizedBox(height: 8),
@@ -170,7 +176,18 @@ class AutoScrapEntry extends StatelessWidget {
           onLongPress: onDelete,
         );
 
-        final memo = ScrapMemo(ticket: ticket, slot: slot);
+        // 메모는 자연 높이로 만든 뒤, 칸이 좁으면 **통째로** 줄입니다.
+        // 글자만 남고 여백이 무너지는 일이 없도록 균일 배율(scaleDown)입니다.
+        final memo = LayoutBuilder(
+          builder: (context, mc) => FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: mc.maxWidth,
+              child: ScrapMemo(ticket: ticket, slot: slot),
+            ),
+          ),
+        );
 
         final children = flip
             ? [Expanded(child: memo), const SizedBox(width: 18), card]

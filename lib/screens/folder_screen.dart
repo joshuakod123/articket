@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
+import '../widgets/scaled_canvas.dart';
 import '../widgets/scrap_page.dart';
 import '../widgets/scrapbook.dart';
 import '../widgets/stub_button.dart';
@@ -334,8 +335,11 @@ class _FolderScreenState extends State<FolderScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ShareCardScreen(
-          artwork: AspectRatio(
-            aspectRatio: 0.72,
+          // 화면에서 보던 페이지를 **같은 비율 그대로** 옮깁니다.
+          // 상자 크기에 맞춰 다시 흐르게 두면 티켓만 작아지고 글자는 그대로라
+          // 줄이 겹칩니다. 340×472(=0.72) 로 그린 뒤 통째로 줄입니다.
+          artwork: ScaledCanvas(
+            design: const Size(340, 472),
             child: _SharePage(folder: widget.folder, store: store),
           ),
           title: widget.folder.subtitle,

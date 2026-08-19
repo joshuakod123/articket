@@ -9,6 +9,7 @@ import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/paper.dart';
+import '../widgets/scaled_canvas.dart';
 import '../widgets/ticket_canvas.dart';
 import '../widgets/ticket_card.dart';
 import 'editor_screen.dart';
@@ -188,8 +189,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ShareCardScreen(
-          artwork: AspectRatio(
-            aspectRatio: ticket.frame.aspect,
+          // 상세 화면에서 보던 크기(가로 300)로 그린 뒤 통째로 줄입니다.
+          // 상자에 맞춰 다시 흐르면 티켓 안 글자 비율이 화면과 달라집니다.
+          artwork: ScaledCanvas(
+            design: Size(300, 300 / ticket.frame.aspect),
             child: TicketCanvas(ticket: ticket),
           ),
           title: ticket.title.replaceAll('\n', ' '),
