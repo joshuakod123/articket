@@ -16,6 +16,8 @@ dependencies:
   image_picker: ^1.1.2
   share_plus: ^11.0.0
   path_provider: ^2.1.4
+  shared_preferences: ^2.3.2  # 티켓·계정·설정 로컬 저장 (탈퇴 시 통째로 삭제)
+  crypto: ^3.0.5              # 비밀번호 해시 (기기 안에 평문으로 두지 않기)
 
 dev_dependencies:
   flutter_test:
@@ -29,7 +31,11 @@ flutter:
   shaders:
     - shaders/holo_foil.frag
 
-  # 실제 포스터 이미지를 넣을 때 활성화하세요.
-  # assets:
-  #   - assets/posters/
-  #   - assets/textures/
+  # ⚠️ 예전에는 이 블록이 통째로 주석이었습니다.
+  # 그래서 `assets/logo.png` 를 넣어 두어도 번들에 들어가지 않았고,
+  # `Image.asset('assets/logo.png')` 는 실행 중에 조용히 회색 상자가 됐습니다.
+  assets:
+    - assets/
+    # 실제 포스터·텍스처를 넣을 때 아래 두 줄을 살리세요.
+    # - assets/posters/
+    # - assets/textures/

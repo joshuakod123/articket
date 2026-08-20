@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../widgets/stacking_loader.dart';
 
 import '../data/ticket_store.dart';
 import '../models/ticket.dart';
@@ -263,12 +264,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
         child: Column(
           children: [
             if (_picking)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: AppColors.foil),
-              )
+              const SizedBox(width: 24, height: 24, child: StackingLoader(size: 24))
             else
               Icon(icon, size: 20, color: AppColors.ink),
             const SizedBox(height: 8),

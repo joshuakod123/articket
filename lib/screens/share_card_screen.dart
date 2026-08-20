@@ -6,6 +6,7 @@ import '../theme/app_text.dart';
 import '../theme/folder_style.dart';
 import '../widgets/folder_texture.dart';
 import '../widgets/paper.dart';
+import '../widgets/stacking_loader.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scaled_canvas.dart';
 import '../widgets/scrapbook.dart' show WashiTape;
@@ -532,13 +533,13 @@ class _Bottom extends StatelessWidget {
                       shape: const RoundedRectangleBorder(),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
+                    // 머티리얼 스피너 대신 티켓 조각이 쌓입니다.
+                    // 버튼 안이라 라벨 없이 뭉치만 씁니다.
                     icon: busy
                         ? const SizedBox(
-                      width: 15,
-                      height: 15,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.stockLight),
+                      width: 20,
+                      height: 20,
+                      child: StackingLoader(size: 20),
                     )
                         : const Icon(Icons.ios_share, size: 17),
                     label: Text(busy ? '만드는 중' : '내보내기',

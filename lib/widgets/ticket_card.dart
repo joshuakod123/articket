@@ -6,6 +6,7 @@ import '../theme/app_text.dart';
 import 'frame_shapes.dart';
 import 'paper.dart';
 import 'poster.dart';
+import 'print_box.dart';
 import 'ticket_clipper.dart' show Barcode;
 
 /// 티켓은 "인쇄물"입니다. 인쇄물은 크기가 달라져도 **배치가 변하지 않고 축척만
@@ -21,51 +22,18 @@ import 'ticket_clipper.dart' show Barcode;
 /// - `compact` 분기마다 패딩·폰트를 따로 관리할 필요가 사라집니다.
 const double ticketDesignWidth = 300.0;
 
-/// 사용자의 시스템 글자 배율까지 따라가면 원도가 흔들립니다. 배율을 고정합니다.
-Widget _asPrint(BuildContext context, Widget child) {
-  final mq = MediaQuery.maybeOf(context);
-  if (mq == null) return child;
-  return MediaQuery(
-    data: mq.copyWith(textScaler: TextScaler.noScaling),
-    child: child,
-  );
-}
-
-/// 원도를 그려서 주어진 상자에 축척해 넣습니다.
+/// 원도를 그려서 주어진 상자에 **비율을 지킨 채** 축척해 넣습니다.
 ///
-/// 제약이 무한대인 자리(예: Column 안에 그냥 놓인 경우)에서도 죽지 않도록
-/// 원도 크기로 폴백합니다.
-class _Scaled extends StatelessWidget {
-  const _Scaled({required this.aspect, required this.child});
-
-  final double aspect;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final designH = ticketDesignWidth / aspect;
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final w = c.hasBoundedWidth ? c.maxWidth : ticketDesignWidth;
-        final h = c.hasBoundedHeight ? c.maxHeight : w / aspect;
-
-        return SizedBox(
-          width: w,
-          height: h,
-          child: FittedBox(
-            fit: BoxFit.fill,
-            child: SizedBox(
-              width: ticketDesignWidth,
-              height: designH,
-              child: child,
-            ),
-          ),
-        );
-      },
+/// 계산은 전부 [PrintBox]가 합니다. 예전 구현이 `BoxFit.fill`로 상자에 억지로
+/// 맞추던 것을, 상자 안에서 비율을 지키는 가장 큰 사각형을 스스로 찾는 방식으로
+/// 바꿨습니다. 호출부가 `AspectRatio`를 잊어도, Hero 비행 중이어도,
+/// 부모가 tight 제약을 걸어도 티켓은 늘어나지 않습니다.
+Widget _print(double aspect, Widget child, {Clip clip = Clip.hardEdge}) =>
+    PrintBox(
+      design: Size(ticketDesignWidth, ticketDesignWidth / aspect),
+      clipBehavior: clip,
+      child: child,
     );
-  }
-}
 
 /// 티켓 앞면. 프레임에 따라 실루엣과 정보 배치가 달라집니다.
 class TicketFront extends StatelessWidget {
@@ -87,18 +55,15 @@ class TicketFront extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _asPrint(
-      context,
-      _Scaled(
-        aspect: ticket.frame.aspect,
-        child: ClipPath(
-          clipper: clipperFor(ticket.frame),
-          child: PaperSurface(
-            color: AppColors.stockLight,
-            seed: ticket.id.hashCode,
-            grain: compact ? 0.035 : 0.055,
-            child: ticket.frame.horizontal ? _horizontal() : _vertical(),
-          ),
+    return _print(
+      ticket.frame.aspect,
+      ClipPath(
+        clipper: clipperFor(ticket.frame),
+        child: PaperSurface(
+          color: AppColors.stockLight,
+          seed: ticket.id.hashCode,
+          grain: compact ? 0.035 : 0.055,
+          child: ticket.frame.horizontal ? _horizontal() : _vertical(),
         ),
       ),
     );
@@ -321,14 +286,27 @@ class _SideStub extends StatelessWidget {
             color: AppColors.ink,
           ),
         ),
+        // 바코드는 회전 후 **두께가 고정**이어야 합니다.
+        // RotatedBox 안쪽에서는 가로/세로 제약이 뒤바뀌므로,
+        // "height"가 회전 뒤의 두께, "width"가 회전 뒤의 길이가 됩니다.
         Expanded(
-          child: RotatedBox(
-            quarterTurns: 3,
-            child: Center(
-              child: Barcode(seed: ticket.id, height: 16),
+          child: Center(
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Barcode(seed: ticket.id, height: 18),
+              ),
             ),
           ),
         ),
+        const SizedBox(height: 4),
+        Text(
+          ticket.serial.split('-').last,
+          maxLines: 1,
+          style: AppText.data(size: 7.5, spacing: 0.4, color: AppColors.pulp),
+        ),
+        const SizedBox(height: 3),
         Text(
           '★${ticket.rating}',
           maxLines: 1,
@@ -340,108 +318,203 @@ class _SideStub extends StatelessWidget {
 }
 
 /// 티켓 뒷면. 별점 · 한 줄 평 · 감상문.
+///
+/// ## 가로 티켓의 뒷면을 두 칸으로 나눈 이유
+///
+/// 예전에는 프레임과 상관없이 **한 줄로 쌓아 올렸습니다.** 세로 티켓(300×517)
+/// 에서는 잘 맞지만, 가로 스텁(300×171)에서는 같은 세로 순서를 171pt 안에
+/// 밀어 넣게 됩니다. 고정 요소(DIARY 줄 · 별 · 한 줄 평 두 줄 · 괘선 · WITH 줄)
+/// 만으로 110pt 남짓을 먹으므로 감상문에 남는 자리는 **두 줄 반**입니다.
+/// 반 줄은 글자 중간에서 잘려 아래 줄과 겹쳐 보입니다.
+///
+/// 이제 가로 티켓은 **앞면과 같은 자리에서** 좌우로 나뉩니다.
+/// 왼쪽은 감상(별점·한 줄 평·감상문), 오른쪽은 스텁(번호·날짜·동행).
+/// 뒤집었을 때 절취선 위치가 앞뒷면에서 일치하니 한 장의 종이로 읽힙니다.
+///
+/// 감상문은 [FittedParagraph]가 남은 높이를 **줄 단위로** 세어 흘립니다.
+/// 더 이상 반 줄이 잘리지 않고, 넘치면 말줄임표로 끝납니다.
 class TicketBack extends StatelessWidget {
   const TicketBack({super.key, required this.ticket});
 
   final Ticket ticket;
 
+  TextStyle get _note =>
+      AppText.ui(size: 12, height: 1.6, color: AppColors.inkSoft);
+
   @override
   Widget build(BuildContext context) {
-    final short = ticket.frame.horizontal;
-
-    return _asPrint(
-      context,
-      _Scaled(
-        aspect: ticket.frame.aspect,
-        child: ClipPath(
-          clipper: clipperFor(ticket.frame),
-          child: PaperSurface(
-            color: AppColors.stock,
-            seed: ticket.id.hashCode + 1,
-            grain: 0.07,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                  18, short ? 14 : 20, 18, short ? 12 : 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text('DIARY',
-                          style: AppText.eyebrow(color: AppColors.oxblood)),
-                      const Spacer(),
-                      Flexible(
-                        child: Text(
-                          'NO. ${ticket.serial.split('-').last}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.data(
-                              size: 9, spacing: 0.6, color: AppColors.inkSoft),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: short ? 8 : 12),
-                  _Stars(rating: ticket.rating),
-                  SizedBox(height: short ? 8 : 14),
-                  Text(
-                    ticket.oneLiner.isEmpty ? '한 줄 평을 남겨보세요' : ticket.oneLiner,
-                    maxLines: short ? 2 : 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.display(
-                      size: short ? 15 : 18,
-                      color: ticket.oneLiner.isEmpty
-                          ? AppColors.pulp
-                          : AppColors.ink,
-                    ),
-                  ),
-                  SizedBox(height: short ? 8 : 14),
-                  Container(height: 1, color: AppColors.line),
-                  SizedBox(height: short ? 8 : 12),
-
-                  // 감상문은 남는 만큼만 차지하고, 자리가 없으면 0까지 줄어듭니다.
-                  Expanded(
-                    child: Text(
-                      ticket.note.isEmpty ? '' : ticket.note,
-                      overflow: TextOverflow.fade,
-                      style: AppText.ui(
-                          size: 12, height: 1.6, color: AppColors.inkSoft),
-                    ),
-                  ),
-
-                  Row(
-                    children: [
-                      Text('WITH',
-                          style: AppText.eyebrow(
-                              color: AppColors.inkSoft.withValues(alpha: .6))),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          ticket.companion.isEmpty ? '—' : ticket.companion,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                          AppText.ui(size: 11, color: AppColors.inkSoft),
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        ticket.dateLabel,
-                        maxLines: 1,
-                        style: AppText.data(
-                            size: 9, spacing: 0.6, color: AppColors.pulp),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+    return _print(
+      ticket.frame.aspect,
+      ClipPath(
+        clipper: clipperFor(ticket.frame),
+        child: PaperSurface(
+          color: AppColors.stock,
+          seed: ticket.id.hashCode + 1,
+          grain: 0.07,
+          child: ticket.frame.horizontal ? _wide() : _tall(),
         ),
       ),
     );
   }
+
+  // ── 세로형 뒷면 ──────────────────────────────────
+
+  Widget _tall() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _header(),
+          const SizedBox(height: 12),
+          _Stars(rating: ticket.rating),
+          const SizedBox(height: 14),
+          _oneLiner(size: 18, maxLines: 3),
+          const SizedBox(height: 14),
+          Container(height: 1, color: AppColors.line),
+          const SizedBox(height: 12),
+          Expanded(child: FittedParagraph(text: ticket.note, style: _note)),
+          const SizedBox(height: 8),
+          _footer(),
+        ],
+      ),
+    );
+  }
+
+  // ── 가로형 뒷면 (앞면과 같은 66:34 분할) ─────────
+
+  Widget _wide() {
+    final f = ticket.frame;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          flex: f.flexPoster,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('DIARY',
+                        style: AppText.eyebrow(color: AppColors.oxblood)),
+                    const SizedBox(width: 10),
+                    _Stars(rating: ticket.rating),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _oneLiner(size: 16, maxLines: 2),
+                const SizedBox(height: 10),
+                Container(height: 1, color: AppColors.line),
+                const SizedBox(height: 9),
+                Expanded(
+                  child: FittedParagraph(text: ticket.note, style: _note),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const PerforationLine(color: AppColors.pulp, vertical: true, inset: 12),
+        Expanded(
+          flex: 100 - f.flexPoster,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _stubField('NO.', ticket.serial.split('-').last),
+                const SizedBox(height: 12),
+                _stubField('DATE', ticket.dateLabel),
+                const Spacer(),
+                _stubField(
+                  'WITH',
+                  ticket.companion.isEmpty ? '—' : ticket.companion,
+                  mono: false,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── 조각들 ──────────────────────────────────────
+
+  Widget _header() => Row(
+    children: [
+      Text('DIARY', style: AppText.eyebrow(color: AppColors.oxblood)),
+      const Spacer(),
+      Flexible(
+        child: Text(
+          'NO. ${ticket.serial.split('-').last}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style:
+          AppText.data(size: 9, spacing: 0.6, color: AppColors.inkSoft),
+        ),
+      ),
+    ],
+  );
+
+  Widget _footer() => Row(
+    children: [
+      Text('WITH',
+          style: AppText.eyebrow(
+              color: AppColors.inkSoft.withValues(alpha: .6))),
+      const SizedBox(width: 8),
+      Flexible(
+        child: Text(
+          ticket.companion.isEmpty ? '—' : ticket.companion,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.ui(size: 11, color: AppColors.inkSoft),
+        ),
+      ),
+      const Spacer(),
+      Text(
+        ticket.dateLabel,
+        maxLines: 1,
+        style: AppText.data(size: 9, spacing: 0.6, color: AppColors.pulp),
+      ),
+    ],
+  );
+
+  Widget _oneLiner({required double size, required int maxLines}) => Text(
+    ticket.oneLiner.isEmpty ? '한 줄 평을 남겨보세요' : ticket.oneLiner,
+    maxLines: maxLines,
+    overflow: TextOverflow.ellipsis,
+    style: AppText.display(
+      size: size,
+      color: ticket.oneLiner.isEmpty ? AppColors.pulp : AppColors.ink,
+    ),
+  );
+
+  Widget _stubField(String label, String value, {bool mono = true}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(label,
+          style: AppText.eyebrow(
+              size: 8, color: AppColors.inkSoft.withValues(alpha: .6))),
+      const SizedBox(height: 3),
+      Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: mono
+            ? AppText.data(
+            size: 11,
+            spacing: 0.6,
+            weight: FontWeight.w700,
+            color: AppColors.ink)
+            : AppText.ui(size: 11, color: AppColors.ink),
+      ),
+    ],
+  );
 }
+
 
 class _Stars extends StatelessWidget {
   const _Stars({required this.rating});

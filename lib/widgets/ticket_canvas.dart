@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/layer.dart';
 import '../models/ticket.dart';
+import 'print_box.dart';
 import 'scrap_layers.dart';
 import 'ticket_card.dart';
 
@@ -39,44 +40,32 @@ class TicketCanvas extends StatelessWidget {
   Widget build(BuildContext context) {
     final designH = ticketDesignWidth / ticket.frame.aspect;
 
-    return LayoutBuilder(
-      builder: (context, c) {
-        final w = c.hasBoundedWidth ? c.maxWidth : ticketDesignWidth;
-        final h = c.hasBoundedHeight ? c.maxHeight : w / ticket.frame.aspect;
-
-        return SizedBox(
-          width: w,
-          height: h,
-          child: FittedBox(
-            fit: BoxFit.fill,
-            // 붙인 것이 티켓 밖으로 조금 삐져나오는 건 자연스럽습니다.
-            clipBehavior: Clip.none,
-            child: SizedBox(
-              width: ticketDesignWidth,
-              height: designH,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(
-                    child: TicketFront(
-                      ticket: ticket,
-                      tilt: tilt,
-                      compact: compact,
-                    ),
-                  ),
-                  if (showLayers)
-                    for (final layer in ticket.layers)
-                      PlacedLayer(
-                        layer: layer,
-                        // 기준은 화면도, 실제 렌더 크기도 아닌 **원도**입니다.
-                        canvas: Size(ticketDesignWidth, designH),
-                      ),
-                ],
-              ),
+    // 예전에는 여기서도 `BoxFit.fill`로 부모 상자에 억지로 맞췄습니다.
+    // Hero 비행처럼 상자 비율이 프레임 비율과 달라지는 순간마다 티켓이
+    // 눈에 띄게 눌렸습니다. 이제 [PrintBox]가 비율을 스스로 지킵니다.
+    return PrintBox(
+      design: Size(ticketDesignWidth, designH),
+      // 붙인 것이 티켓 밖으로 조금 삐져나오는 건 자연스럽습니다.
+      clipBehavior: Clip.none,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: TicketFront(
+              ticket: ticket,
+              tilt: tilt,
+              compact: compact,
             ),
           ),
-        );
-      },
+          if (showLayers)
+            for (final layer in ticket.layers)
+              PlacedLayer(
+                layer: layer,
+                // 기준은 화면도, 실제 렌더 크기도 아닌 **원도**입니다.
+                canvas: Size(ticketDesignWidth, designH),
+              ),
+        ],
+      ),
     );
   }
 }

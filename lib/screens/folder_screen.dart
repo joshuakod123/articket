@@ -354,7 +354,8 @@ class _FolderScreenState extends State<FolderScreen> {
 
   void _create() {
     final id = const Uuid().v4();
-    // 발권 번호는 여기서 만들지 않습니다. store가 관람일 기준으로 매깁니다.
+    // 발권 번호는 여기서 만들지 않습니다.
+    // store.add() 가 이 순간 딱 한 번 도장을 찍고, 그 뒤로는 바뀌지 않습니다.
     final ticket = Ticket(
       id: id,
       folderId: widget.folder.id,

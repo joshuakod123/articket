@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/serial.dart';
 import '../theme/folder_style.dart';
 import 'layer.dart';
 
@@ -102,7 +103,8 @@ class Ticket {
     required this.title,
     required this.venue,
     required this.visitedAt,
-    this.serial = '',
+    this.issuedYear = 0,
+    this.issuedSeq = 0,
     this.genre = '미술',
     this.frame = TicketFrame.classic,
     this.rating = 0,
@@ -126,12 +128,30 @@ class Ticket {
   String venue;
   DateTime visitedAt;
 
+  // ── 발권 도장 ───────────────────────────────────
+  //
+  // 예전에는 `String serial` 필드 하나였고, [TicketStore]가 목록이 바뀔 때마다
+  // 전체를 **다시 매겼습니다.** 티켓을 하나 버리면 뒤 번호가 당겨져서,
+  // 이미 공유해 둔 카드의 번호가 다른 티켓을 가리키게 됐습니다.
+  //
+  // 이제 발권은 한 번뿐입니다. 이 두 값은 [TicketStore.add]가 딱 한 번 찍고
+  // 그 뒤로는 아무도 건드리지 않습니다. 관람일을 고쳐도 번호는 그대로입니다.
+
+  /// 번호를 찍은 해. 0이면 아직 발권 전(초안)입니다.
+  int issuedYear;
+
+  /// 그 해의 몇 번째로 찍혔는지. 0이면 아직 발권 전입니다.
+  int issuedSeq;
+
   /// 발권 번호(`AK-2026-014`). 고정폭으로 렌더링합니다.
   ///
-  /// **여기에 직접 쓰지 마세요.** 이 값은 [TicketStore]가 티켓 목록 전체를 보고
-  /// 다시 매깁니다(`lib/data/serial.dart` 참고). 만들 때 비워두면 됩니다.
+  /// 계산해서 보여줄 뿐, 저장되는 것은 [issuedYear] · [issuedSeq] 입니다.
   /// 종이 결·바코드처럼 "변하면 안 되는" 씨앗은 [serial]이 아니라 [id]를 씁니다.
-  String serial;
+  String get serial => isIssued
+      ? ticketSerial(year: issuedYear, seq: issuedSeq)
+      : kUnissuedSerial;
+
+  bool get isIssued => issuedYear > 0 && issuedSeq > 0;
 
   String genre;
   TicketFrame frame;
@@ -191,7 +211,10 @@ class Ticket {
     'title': title,
     'venue': venue,
     'visitedAt': visitedAt.toIso8601String(),
+    // 번호는 사람이 읽으라고 같이 넣지만, 되읽는 것은 아래 두 값입니다.
     'serial': serial,
+    'issuedYear': issuedYear,
+    'issuedSeq': issuedSeq,
     'genre': genre,
     'frame': frame.name,
     'rating': rating,
@@ -214,7 +237,13 @@ class Ticket {
     title: j['title'] as String? ?? '',
     venue: j['venue'] as String? ?? '',
     visitedAt: DateTime.parse(j['visitedAt'] as String),
-    serial: j['serial'] as String? ?? '',
+    // 구버전(번호를 문자열로만 저장)에서 올라온 데이터도 받아 냅니다.
+    issuedYear: (j['issuedYear'] as int?) ??
+        parseTicketSerial(j['serial'] as String?)?.year ??
+        0,
+    issuedSeq: (j['issuedSeq'] as int?) ??
+        parseTicketSerial(j['serial'] as String?)?.seq ??
+        0,
     genre: j['genre'] as String? ?? '미술',
     frame: TicketFrame.parse(j['frame'] as String?),
     rating: j['rating'] as int? ?? 0,

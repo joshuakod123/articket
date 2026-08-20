@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../data/ticket_store.dart';
+import '../services/auth_service.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
@@ -12,13 +13,16 @@ import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scrapbook.dart' show WashiTape;
 import '../widgets/ticket_canvas.dart';
+import 'settings_screen.dart';
 import 'ticket_detail_screen.dart';
 
-/// 관람자 이름. 앱을 켜 둔 동안 유지됩니다.
+/// 관람자 이름은 이제 [AuthService]가 들고 있습니다.
 ///
-/// Phase 1 이후 로컬 DB(Hive/Isar)로 옮길 때 이 노티파이어만 갈아 끼우면
-/// 화면 코드는 그대로 둘 수 있습니다.
-final ValueNotifier<String> viewerName = ValueNotifier<String>('이름 없는 관람자');
+/// 예전에는 여기 전역 `ValueNotifier` 하나였습니다. 앱을 끄면 사라졌고,
+/// 계정이 생긴 지금은 "회원증에 적힌 이름"과 "계정 이름"이 따로 놀게 됩니다.
+/// 이 게터는 옛 호출부가 깨지지 않도록 남겨 둔 얇은 별칭입니다.
+String get viewerNameText =>
+    AuthService.instance.viewer?.name ?? '이름 없는 관람자';
 
 /// 내 기록.
 ///
@@ -48,6 +52,16 @@ class ProfileScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('MY RECORD',
             style: AppText.eyebrow(size: 12, color: AppColors.ink)),
+        actions: [
+          IconButton(
+            tooltip: '설정',
+            icon: const Icon(Icons.tune),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: ListenableBuilder(
         listenable: store,
@@ -351,10 +365,10 @@ class _MemberPlate extends StatelessWidget {
                       child: Row(
                         children: [
                           Flexible(
-                            child: ValueListenableBuilder<String>(
-                              valueListenable: viewerName,
-                              builder: (context, name, _) => Text(
-                                name,
+                            child: ListenableBuilder(
+                              listenable: AuthService.instance,
+                              builder: (context, _) => Text(
+                                viewerNameText,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppText.display(
@@ -447,13 +461,14 @@ class _MemberPlate extends StatelessWidget {
   Future<void> _rename(BuildContext context) async {
     final result = await showDialog<String>(
       context: context,
-      builder: (_) => _NameDialog(initial: viewerName.value),
+      builder: (_) => _NameDialog(initial: viewerNameText),
     );
 
     if (result == null) return;
     final name = result.trim();
     if (name.isEmpty) return;
-    viewerName.value = name;
+    // 계정 쪽에 적어야 다음에 켰을 때도 남습니다.
+    await AuthService.instance.rename(name);
   }
 }
 

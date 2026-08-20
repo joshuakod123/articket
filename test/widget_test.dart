@@ -6,16 +6,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:articket/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:articket/screens/root_shell.dart';
+import 'package:articket/theme/app_theme.dart';
 import 'package:articket/data/ticket_store.dart';
 import 'package:articket/models/layer.dart';
 import 'package:articket/models/ticket.dart';
 import 'package:articket/widgets/index_tab.dart';
 import 'package:articket/widgets/stamp.dart';
 
+/// 테스트에서는 [AppGate]를 건너뛰고 본 화면만 띄웁니다.
+///
+/// 앱을 통째로 켜면 스플래시 900ms + 로그인 화면을 지나야 하고, 그러려면
+/// 테스트마다 계정을 만들어 두어야 합니다. 여기서 보려는 건 서랍이지
+/// 로그인 흐름이 아니므로 [RootShell]을 직접 물립니다.
+/// (로그인·탈퇴 흐름은 따로 테스트를 씁니다)
+Widget _shell() => MaterialApp(theme: AppTheme.build(), home: const RootShell());
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    // 저장소가 진짜 파일을 건드리지 않게 가짜 prefs 를 물립니다.
+    SharedPreferences.setMockInitialValues({});
+    // 예전에는 TicketStore 생성자가 목업을 부어 넣었지만, 이제 load() 가
+    // 첫 실행일 때만 깝니다. 테스트에서도 한 번 불러 줘야 합니다.
+    await TicketStore.instance.load();
+  });
+
   testWidgets('아카이브 홈에 서류철이 쌓여 있다', (WidgetTester tester) async {
-    await tester.pumpWidget(const ArticketApp());
+    await tester.pumpWidget(_shell());
     await tester.pumpAndSettle();
 
     expect(find.text('티켓 서랍'), findsOneWidget);
@@ -27,7 +48,7 @@ void main() {
 
   testWidgets('서류철을 누르면 표지가 열리고 스크랩북이 나온다',
           (WidgetTester tester) async {
-        await tester.pumpWidget(const ArticketApp());
+        await tester.pumpWidget(_shell());
         await tester.pumpAndSettle();
 
         final first = TicketStore.instance.folders.first;
@@ -46,7 +67,7 @@ void main() {
     final store = TicketStore.instance;
     final before = store.folders.length;
 
-    await tester.pumpWidget(const ArticketApp());
+    await tester.pumpWidget(_shell());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('서류철 만들기'));
@@ -64,7 +85,7 @@ void main() {
   });
 
   testWidgets('아래 탭바로 달력·내 기록으로 건너간다', (WidgetTester tester) async {
-    await tester.pumpWidget(const ArticketApp());
+    await tester.pumpWidget(_shell());
     await tester.pumpAndSettle();
 
     // 달력.
@@ -104,45 +125,80 @@ void main() {
   // "전체 티켓 수 + 1"로 만들어졌습니다. 지우고 만들면 번호가 겹쳤고,
   // 2026년 첫 관람이 114번이었습니다.
 
-  test('발권 번호는 관람한 해 기준으로 1번부터 매겨진다', () {
+  test('발권 번호는 관람한 해를 앞에 달고 그 해 안에서 겹치지 않는다', () {
     final store = TicketStore.instance;
-    for (final t in store.tickets) {
-      expect(t.serial, startsWith('AK-${t.visitedAt.year}-'));
-    }
-
-    // 같은 해 안에서 번호가 겹치지 않는다.
     final byYear = <int, Set<String>>{};
     for (final t in store.tickets) {
-      final set = byYear.putIfAbsent(t.visitedAt.year, () => <String>{});
+      expect(t.isIssued, isTrue, reason: '번호가 안 찍힌 티켓: ${t.title}');
+      expect(t.serial, startsWith('AK-${t.issuedYear}-'));
+      final set = byYear.putIfAbsent(t.issuedYear, () => <String>{});
       expect(set.add(t.serial), isTrue, reason: '번호가 겹쳤습니다: ${t.serial}');
-    }
-
-    // 그 해의 첫 티켓은 반드시 001번이다.
-    for (final year in byYear.keys) {
-      expect(byYear[year], contains('AK-$year-001'));
     }
   });
 
-  test('티켓을 넣고 빼면 번호가 다시 매겨진다', () {
+  test('한 번 찍힌 번호는 다른 티켓을 지워도 바뀌지 않는다', () {
     final store = TicketStore.instance;
     final folderId = store.folders.first.id;
 
-    final fresh = Ticket(
-      id: 'test-serial-1',
+    final a = Ticket(
+      id: 'test-serial-a',
       folderId: folderId,
-      title: '번호 시험',
+      title: '먼저 온 표',
       venue: '어딘가',
-      // 아주 이른 날짜 → 그 해 1번이 되어야 합니다.
       visitedAt: DateTime(2024, 1, 2),
     );
-    store.add(fresh);
-    expect(fresh.serial, 'AK-2024-001');
+    final b = Ticket(
+      id: 'test-serial-b',
+      folderId: folderId,
+      title: '나중 온 표',
+      venue: '어딘가',
+      visitedAt: DateTime(2024, 3, 4),
+    );
+    store.add(a);
+    store.add(b);
 
-    // 발권 번호를 넘기지 않아도 store가 채웁니다.
-    expect(store.tickets.where((t) => t.serial.isEmpty), isEmpty);
+    final aSerial = a.serial;
+    final bSerial = b.serial;
+    expect(aSerial, isNot(bSerial));
 
-    store.remove(fresh.id);
-    expect(store.tickets.any((t) => t.id == fresh.id), isFalse);
+    // 앞 티켓을 버려도 뒤 티켓의 번호는 **그대로**여야 합니다.
+    // 예전에는 여기서 b 가 a 의 번호를 물려받았습니다.
+    store.remove(a.id);
+    expect(b.serial, bSerial);
+
+    // 그리고 버린 번호는 다시 발급되지 않습니다.
+    final c = Ticket(
+      id: 'test-serial-c',
+      folderId: folderId,
+      title: '그 다음 표',
+      venue: '어딘가',
+      visitedAt: DateTime(2024, 6, 7),
+    );
+    store.add(c);
+    expect(c.serial, isNot(aSerial));
+    expect(c.serial, isNot(bSerial));
+
+    store.remove(b.id);
+    store.remove(c.id);
+  });
+
+  test('관람일을 고쳐도 이미 찍힌 번호는 그대로다', () {
+    final store = TicketStore.instance;
+    final t = Ticket(
+      id: 'test-serial-d',
+      folderId: store.folders.first.id,
+      title: '날짜 고칠 표',
+      venue: '어딘가',
+      visitedAt: DateTime(2024, 8, 9),
+    );
+    store.add(t);
+    final stamped = t.serial;
+
+    t.visitedAt = DateTime(2023, 1, 1);
+    store.touch();
+    expect(t.serial, stamped);
+
+    store.remove(t.id);
   });
 
   test('회원 번호는 티켓을 추가해도 바뀌지 않는다', () {
