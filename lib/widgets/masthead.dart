@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import 'brand_logo.dart';
-import 'paper.dart';
+import 'folder_texture.dart';
 
 /// 서랍 화면 맨 위. **전시 도록의 표제지(title page)** 를 스크롤에 맞춰 접습니다.
 ///
