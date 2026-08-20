@@ -13,6 +13,7 @@ import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scrap_layers.dart';
 import '../widgets/snap.dart';
+import '../widgets/stamp.dart';
 import '../widgets/ticket_card.dart';
 import 'record_sheet.dart';
 import 'scrap_sheets.dart';
@@ -316,6 +317,8 @@ class _EditorScreenState extends State<EditorScreen> {
                   onEdit: () => _editLayer(selected),
                   onDuplicate: () => _duplicate(selected),
                   onDelete: () => _removeLayer(selected),
+                  onRotate: (d) => _nudgeRotation(selected, d),
+                  onStraighten: () => _straighten(selected),
                   onDone: () => setState(() => _selectedId = null),
                 ),
 
@@ -323,6 +326,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 onFrame: () => _openStyle(0),
                 onPoster: () => _openStyle(1),
                 onSticker: _addSticker,
+                onStamp: _addStamp,
                 onText: _addText,
                 onTape: _addTape,
                 onPhoto: _addPhoto,
@@ -373,6 +377,25 @@ class _EditorScreenState extends State<EditorScreen> {
     ));
   }
 
+  /// 도장은 **크기 자체가 표현**이라, 시트에서 고른 지름을 fontSize에 담습니다.
+  /// 스케일로 키우면 테두리 두께까지 같이 굵어져 도장처럼 안 보입니다.
+  Future<void> _addStamp() async {
+    final picked = await pickStamp(context);
+    if (picked == null) return;
+    _place(ScrapLayer(
+      id: _uuid.v4(),
+      kind: LayerKind.stamp,
+      content: picked.spec.encode(),
+      dx: 0.72,
+      dy: 0.72,
+      // 반듯한 도장은 없습니다. 살짝 비뚤게 찍힙니다.
+      rotation: -0.14,
+      color: picked.color.toARGB32(),
+      fontSize: picked.size,
+    ));
+    Feel.stamp(); // 붙인 게 아니라 찍은 것. 손끝에도 그렇게 전합니다.
+  }
+
   Future<void> _addTape() async {
     final picked = await pickTape(context);
     if (picked == null) return;
@@ -387,35 +410,55 @@ class _EditorScreenState extends State<EditorScreen> {
     ));
   }
 
+  /// 폴라로이드 붙이기.
+  ///
+  /// **툴바를 누르자마자 갤러리가 뜨지 않습니다.** 어디서 가져올지 먼저
+  /// 묻고, 시트를 그냥 내리면 아무 일도 일어나지 않습니다. 도구를 구경하다
+  /// 시스템 앨범에 갇히던 문제를 여기서 끊습니다.
   Future<void> _addPhoto() async {
-    String path = '';
-    try {
-      final shot = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1400,
-        imageQuality: 88,
-      );
-      path = shot?.path ?? '';
-    } catch (e) {
-      if (mounted) {
-        PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
-      }
-    }
+    final source = await pickPhotoSource(context);
+    if (source == null || !mounted) return;
 
+    final path = await _pickImagePath(source);
     if (!mounted) return;
+
+    // 갤러리를 열었다가 아무것도 안 고르고 나온 경우 = 취소.
+    // 빈 폴라로이드를 몰래 붙여 놓으면 사용자가 지워야 합니다.
+    if (source != PhotoSource.blank && path == null) return;
+
     _place(ScrapLayer(
       id: _uuid.v4(),
       kind: LayerKind.photo,
-      content: path,
+      content: path ?? '',
       dx: 0.68,
       dy: 0.6,
       rotation: 0.12,
       color: AppColors.oxbloodDim.toARGB32(),
     ));
 
-    if (path.isEmpty) {
+    if (path == null || path.isEmpty) {
       PaperToast.show(context, '빈 폴라로이드를 붙였습니다',
-          detail: '다시 누르면 사진을 고를 수 있습니다');
+          detail: '두 번 누르면 사진을 넣을 수 있습니다');
+    }
+  }
+
+  /// 실제로 사진 한 장을 가져옵니다. 취소하면 null.
+  Future<String?> _pickImagePath(PhotoSource source) async {
+    if (source == PhotoSource.blank) return null;
+    try {
+      final shot = await _picker.pickImage(
+        source: source == PhotoSource.camera
+            ? ImageSource.camera
+            : ImageSource.gallery,
+        maxWidth: 1400,
+        imageQuality: 88,
+      );
+      return shot?.path;
+    } catch (e) {
+      if (mounted) {
+        PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
+      }
+      return null;
     }
   }
 
@@ -427,6 +470,26 @@ class _EditorScreenState extends State<EditorScreen> {
     Feel.stamp();
     setState(() => _selectedId = null);
     PaperToast.show(context, '한 겹 떼어냈습니다', detail: '↩︎ 로 되돌릴 수 있습니다');
+  }
+
+  /// 선택한 레이어를 한 칸(7.5°) 돌립니다.
+  ///
+  /// 두 손가락 회전은 이미 되지만, 작은 스티커 위에서 두 손가락을 벌리면
+  /// 손가락이 대상을 다 가립니다. 한 손으로 각도를 다듬을 길이 필요합니다.
+  void _nudgeRotation(ScrapLayer layer, double delta) {
+    _snapshot();
+    Feel.pick();
+    setState(() => layer.rotation += delta);
+    _endGesture();
+  }
+
+  /// 각도만 0으로. 크기와 자리는 건드리지 않습니다.
+  void _straighten(ScrapLayer layer) {
+    if (layer.rotation == 0) return;
+    _snapshot();
+    Feel.snap();
+    setState(() => layer.rotation = 0);
+    _endGesture();
   }
 
   void _duplicate(ScrapLayer layer) {
@@ -478,20 +541,27 @@ class _EditorScreenState extends State<EditorScreen> {
           ..content = picked.pattern.name
           ..color = picked.color.toARGB32();
 
+      case LayerKind.stamp:
+        final picked = await pickStamp(
+          context,
+          initial: StampSpec.decode(layer.content),
+          color: Color(layer.color),
+          size: layer.fontSize,
+        );
+        if (picked == null) return;
+        _snapshot();
+        layer
+          ..content = picked.spec.encode()
+          ..color = picked.color.toARGB32()
+          ..fontSize = picked.size;
+
       case LayerKind.photo:
-        try {
-          final shot = await _picker.pickImage(
-            source: ImageSource.gallery,
-            maxWidth: 1400,
-            imageQuality: 88,
-          );
-          if (shot == null) return;
-          _snapshot();
-          layer.content = shot.path;
-        } catch (e) {
-          if (mounted) PaperToast.warn(context, '사진을 불러오지 못했습니다');
-          return;
-        }
+        final source = await pickPhotoSource(context);
+        if (source == null || !mounted) return;
+        final path = await _pickImagePath(source);
+        if (source != PhotoSource.blank && path == null) return;
+        _snapshot();
+        layer.content = path ?? '';
     }
 
     store.touch();
@@ -553,6 +623,8 @@ class _LayerBar extends StatelessWidget {
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
+    required this.onRotate,
+    required this.onStraighten,
     required this.onDone,
   });
 
@@ -560,13 +632,21 @@ class _LayerBar extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
+
+  /// 라디안 증분. 길게 누르면 각도를 0으로 되돌립니다.
+  final ValueChanged<double> onRotate;
+  final VoidCallback onStraighten;
   final VoidCallback onDone;
+
+  /// 한 번에 도는 각도. 7.5°씩이면 24번에 한 바퀴입니다.
+  static const _step = 0.1309;
 
   String get _name => switch (layer.kind) {
     LayerKind.sticker => '스티커',
     LayerKind.text => '글자',
     LayerKind.tape => '테이프',
     LayerKind.photo => '폴라로이드',
+    LayerKind.stamp => '도장',
   };
 
   @override
@@ -589,12 +669,22 @@ class _LayerBar extends StatelessWidget {
               margin: const EdgeInsets.only(right: 10),
               color: AppColors.foil,
             ),
-            Text(_name,
-                style: AppText.ui(
-                    size: 12,
-                    weight: FontWeight.w600,
-                    color: AppColors.ink)),
+            // 버튼이 여섯 개라, 이름 쪽이 먼저 양보해야 좁은 화면에서
+            // 노란 오버플로 줄무늬가 뜨지 않습니다.
+            Flexible(
+              child: Text(_name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.ui(
+                      size: 12,
+                      weight: FontWeight.w600,
+                      color: AppColors.ink)),
+            ),
             const Spacer(),
+            _act(Icons.rotate_left, '왼쪽으로 돌리기', () => onRotate(-_step),
+                onLongPress: onStraighten),
+            _act(Icons.rotate_right, '오른쪽으로 돌리기', () => onRotate(_step),
+                onLongPress: onStraighten),
             _act(Icons.tune, '고치기', onEdit),
             _act(Icons.copy_all_outlined, '복제', onDuplicate),
             _act(Icons.delete_outline, '떼어내기', onDelete,
@@ -606,13 +696,21 @@ class _LayerBar extends StatelessWidget {
     );
   }
 
-  Widget _act(IconData icon, String tip, VoidCallback onTap, {Color? color}) =>
-      IconButton(
-        tooltip: tip,
-        onPressed: onTap,
-        visualDensity: VisualDensity.compact,
-        icon: Icon(icon, size: 19, color: color ?? AppColors.ink),
-      );
+  Widget _act(IconData icon, String tip, VoidCallback onTap,
+      {Color? color, VoidCallback? onLongPress}) {
+    final button = IconButton(
+      tooltip: tip,
+      onPressed: onTap,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      icon: Icon(icon, size: 19, color: color ?? AppColors.ink),
+    );
+    if (onLongPress == null) return button;
+    // 길게 누르면 '똑바로'. 회전 버튼 옆에 초기화 버튼을 하나 더 두면
+    // 줄이 길어져서, 같은 자리에 겹쳐 둡니다.
+    return GestureDetector(onLongPress: onLongPress, child: button);
+  }
 }
 
 /// 한 손가락 = 이동, 두 손가락 = 회전 + 확대.
@@ -645,6 +743,13 @@ class _EditableLayer extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onEdit;
 
+  /// 레이어를 아무리 줄여도 손잡이는 손끝만 하게 남깁니다.
+  /// (0.5배로 줄인 스티커의 ✕가 13픽셀이면 아무도 못 누릅니다)
+  double get _handleScale => (1 / layer.scale).clamp(0.55, 2.0);
+
+  /// 손잡이가 Stack 안에 온전히 들어앉는 데 필요한 여백.
+  double get _handlePad => _Handle.diameter * _handleScale / 2 + 2;
+
   @override
   Widget build(BuildContext context) {
     final pos = layer.offsetIn(canvas);
@@ -673,36 +778,50 @@ class _EditableLayer extends StatelessWidget {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: selected
-                            ? AppColors.foil.withValues(alpha: 0.9)
-                            : Colors.transparent,
-                        width: 1,
+                  // 손잡이가 **앉을 자리**를 미리 비워 둡니다.
+                  //
+                  // 예전에는 손잡이를 `right: -13, top: -13`으로 Stack 밖에
+                  // 내걸었습니다. `Clip.none` 덕분에 보이기는 했지만,
+                  // Flutter의 `RenderBox.hitTest`는 **자기 크기 밖의 좌표를
+                  // 먼저 걸러냅니다.** 그래서 ✕는 그려지기만 하고 탭이 한 번도
+                  // 닿지 않았습니다. 이게 "X를 눌러도 안 지워진다"의 정체입니다.
+                  Padding(
+                    padding: EdgeInsets.all(_handlePad),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.foil.withValues(alpha: 0.9)
+                              : Colors.transparent,
+                          width: 1,
+                        ),
                       ),
+                      child: buildLayerContent(layer),
                     ),
-                    child: buildLayerContent(layer),
                   ),
 
                   // 선택했을 때만 나오는 손잡이 두 개.
+                  // 레이어 배율을 되돌려서, 아주 작게 줄인 스티커에서도
+                  // 손끝만 한 크기를 지킵니다.
                   if (selected) ...[
                     Positioned(
-                      right: -13,
-                      top: -13,
+                      right: 0,
+                      top: 0,
                       child: _Handle(
                         icon: Icons.close,
                         color: AppColors.oxblood,
+                        scale: _handleScale,
                         onTap: onDelete,
                       ),
                     ),
                     Positioned(
-                      left: -13,
-                      top: -13,
+                      left: 0,
+                      top: 0,
                       child: _Handle(
                         icon: Icons.tune,
                         color: AppColors.ink,
+                        scale: _handleScale,
                         onTap: onEdit,
                       ),
                     ),
@@ -723,11 +842,18 @@ class _Handle extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.onTap,
+    this.scale = 1,
   });
 
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+
+  /// 바깥 `Transform.scale`을 상쇄하는 배율.
+  final double scale;
+
+  /// 손잡이 지름. 여백 계산이 이 값을 참조합니다.
+  static const diameter = 28.0;
 
   @override
   Widget build(BuildContext context) {
@@ -736,8 +862,8 @@ class _Handle extends StatelessWidget {
       // 작은 아이콘이라 히트 영역을 넉넉히 잡습니다.
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 26,
-        height: 26,
+        width: diameter * scale,
+        height: diameter * scale,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: color,
@@ -751,7 +877,7 @@ class _Handle extends StatelessWidget {
             ),
           ],
         ),
-        child: Icon(icon, size: 14, color: AppColors.stockLight),
+        child: Icon(icon, size: 15 * scale, color: AppColors.stockLight),
       ),
     );
   }
@@ -762,6 +888,7 @@ class _Toolbar extends StatelessWidget {
     required this.onFrame,
     required this.onPoster,
     required this.onSticker,
+    required this.onStamp,
     required this.onText,
     required this.onTape,
     required this.onPhoto,
@@ -771,6 +898,7 @@ class _Toolbar extends StatelessWidget {
   final VoidCallback onFrame;
   final VoidCallback onPoster;
   final VoidCallback onSticker;
+  final VoidCallback onStamp;
   final VoidCallback onText;
   final VoidCallback onTape;
   final VoidCallback onPhoto;
@@ -796,6 +924,7 @@ class _Toolbar extends StatelessWidget {
                   _tool(Icons.crop_free, '프레임', onFrame),
                   _tool(Icons.wallpaper_outlined, '포스터', onPoster),
                   _tool(Icons.auto_awesome_outlined, '스티커', onSticker),
+                  _tool(Icons.approval_outlined, '도장', onStamp),
                   _tool(Icons.text_fields, '글자', onText),
                   _tool(Icons.horizontal_rule, '테이프', onTape),
                   _tool(Icons.photo_outlined, '폴라로이드', onPhoto),

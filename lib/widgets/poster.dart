@@ -51,7 +51,7 @@ class Poster extends StatelessWidget {
           HoloFoil(
             tilt: tilt,
             strength: holoStrength,
-            seed: ticket.serial.hashCode,
+            seed: ticket.id.hashCode,
           ),
         if (child != null) child!,
       ],

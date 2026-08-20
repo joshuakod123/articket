@@ -95,7 +95,7 @@ class TicketFront extends StatelessWidget {
           clipper: clipperFor(ticket.frame),
           child: PaperSurface(
             color: AppColors.stockLight,
-            seed: ticket.serial.hashCode,
+            seed: ticket.id.hashCode,
             grain: compact ? 0.035 : 0.055,
             child: ticket.frame.horizontal ? _horizontal() : _vertical(),
           ),
@@ -253,7 +253,7 @@ class _Stub extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Barcode(serial: ticket.serial, height: 22),
+                Barcode(seed: ticket.id, height: 22),
                 const SizedBox(height: 4),
                 Text(
                   ticket.serial,
@@ -325,7 +325,7 @@ class _SideStub extends StatelessWidget {
           child: RotatedBox(
             quarterTurns: 3,
             child: Center(
-              child: Barcode(serial: ticket.serial, height: 16),
+              child: Barcode(seed: ticket.id, height: 16),
             ),
           ),
         ),
@@ -357,7 +357,7 @@ class TicketBack extends StatelessWidget {
           clipper: clipperFor(ticket.frame),
           child: PaperSurface(
             color: AppColors.stock,
-            seed: ticket.serial.hashCode + 1,
+            seed: ticket.id.hashCode + 1,
             grain: 0.07,
             child: Padding(
               padding: EdgeInsets.fromLTRB(

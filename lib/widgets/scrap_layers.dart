@@ -8,6 +8,7 @@ import '../models/layer.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../theme/folder_style.dart';
+import 'stamp.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 벡터 스티커
@@ -479,6 +480,18 @@ Widget buildLayerContent(ScrapLayer layer) {
   // ── 폴라로이드 ──────────────────────────────────
     case LayerKind.photo:
       return _Polaroid(layer: layer, tint: color);
+
+  // ── 도장 ──────────────────────────────────────
+    case LayerKind.stamp:
+      return StampMark(
+        spec: StampSpec.decode(layer.content),
+        color: color,
+        // 도장은 크기 자체가 표현이라 fontSize를 지름으로 씁니다.
+        size: layer.fontSize,
+        // 잉크가 벗겨진 자리는 레이어마다 고정. 다시 그릴 때 자국이
+        // 춤추면 "찍힌 것"이 아니라 "떨리는 것"으로 보입니다.
+        seed: layer.id.hashCode,
+      );
   }
 }
 

@@ -8,7 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:articket/main.dart';
 import 'package:articket/data/ticket_store.dart';
+import 'package:articket/models/layer.dart';
+import 'package:articket/models/ticket.dart';
 import 'package:articket/widgets/index_tab.dart';
+import 'package:articket/widgets/stamp.dart';
 
 void main() {
   testWidgets('아카이브 홈에 서류철이 쌓여 있다', (WidgetTester tester) async {
@@ -73,7 +76,11 @@ void main() {
     await tester.tap(find.text('내 기록'));
     await tester.pumpAndSettle();
     expect(find.text('MY RECORD'), findsOneWidget);
-    expect(find.text('MEMBER'), findsOneWidget);
+    // 회원증 머리말은 이제 "무슨 연도인지"까지 말합니다.
+    expect(
+      find.text('MEMBER SINCE ${TicketStore.instance.joinedYear}'),
+      findsOneWidget,
+    );
 
     // 서랍으로 복귀.
     await tester.tap(find.text('서랍'));
@@ -89,4 +96,110 @@ void main() {
       expect(tickets.length, store.countIn(folder.id));
     }
   });
+
+
+  // ── 발권 번호 ─────────────────────────────────
+  //
+  // 예전에는 번호가 목업에 손으로 적혀 있거나(`AK-2026-00114`),
+  // "전체 티켓 수 + 1"로 만들어졌습니다. 지우고 만들면 번호가 겹쳤고,
+  // 2026년 첫 관람이 114번이었습니다.
+
+  test('발권 번호는 관람한 해 기준으로 1번부터 매겨진다', () {
+    final store = TicketStore.instance;
+    for (final t in store.tickets) {
+      expect(t.serial, startsWith('AK-${t.visitedAt.year}-'));
+    }
+
+    // 같은 해 안에서 번호가 겹치지 않는다.
+    final byYear = <int, Set<String>>{};
+    for (final t in store.tickets) {
+      final set = byYear.putIfAbsent(t.visitedAt.year, () => <String>{});
+      expect(set.add(t.serial), isTrue, reason: '번호가 겹쳤습니다: ${t.serial}');
+    }
+
+    // 그 해의 첫 티켓은 반드시 001번이다.
+    for (final year in byYear.keys) {
+      expect(byYear[year], contains('AK-$year-001'));
+    }
+  });
+
+  test('티켓을 넣고 빼면 번호가 다시 매겨진다', () {
+    final store = TicketStore.instance;
+    final folderId = store.folders.first.id;
+
+    final fresh = Ticket(
+      id: 'test-serial-1',
+      folderId: folderId,
+      title: '번호 시험',
+      venue: '어딘가',
+      // 아주 이른 날짜 → 그 해 1번이 되어야 합니다.
+      visitedAt: DateTime(2024, 1, 2),
+    );
+    store.add(fresh);
+    expect(fresh.serial, 'AK-2024-001');
+
+    // 발권 번호를 넘기지 않아도 store가 채웁니다.
+    expect(store.tickets.where((t) => t.serial.isEmpty), isEmpty);
+
+    store.remove(fresh.id);
+    expect(store.tickets.any((t) => t.id == fresh.id), isFalse);
+  });
+
+  test('회원 번호는 티켓을 추가해도 바뀌지 않는다', () {
+    final store = TicketStore.instance;
+    final before = store.memberSerialText;
+
+    final fresh = Ticket(
+      id: 'test-member-1',
+      folderId: store.folders.first.id,
+      title: '회원 번호 시험',
+      venue: '어딘가',
+      // 시작 연도보다 나중이라 joinedYear는 그대로여야 합니다.
+      visitedAt: DateTime(store.joinedYear + 1, 5, 5),
+    );
+    store.add(fresh);
+    expect(store.memberSerialText, before);
+
+    store.remove(fresh.id);
+    expect(store.memberSerialText, before);
+  });
+
+  // ── 도장 ─────────────────────────────────────
+
+  test('도장 내용은 접었다 펴도 그대로다', () {
+    const spec = StampSpec(
+      shape: StampShape.scallop,
+      top: 'ARTICKET',
+      center: '관람 완료',
+      bottom: '2026.07.14',
+    );
+    final again = StampSpec.decode(spec.encode());
+
+    expect(again.shape, spec.shape);
+    expect(again.top, spec.top);
+    expect(again.center, spec.center);
+    expect(again.bottom, spec.bottom);
+  });
+
+  test('도장 구분자가 섞여 들어와도 깨지지 않는다', () {
+    const spec = StampSpec(center: 'a|b|c', top: '', bottom: '');
+    final again = StampSpec.decode(spec.encode());
+    expect(again.center, 'a b c');
+    expect(again.shape, StampShape.circle);
+  });
+
+  test('도장 레이어를 저장했다 불러올 수 있다', () {
+    final layer = ScrapLayer(
+      id: 'stamp-1',
+      kind: LayerKind.stamp,
+      content: const StampSpec(center: '관람 완료').encode(),
+      fontSize: 96,
+    );
+    final back = ScrapLayer.decodeList(ScrapLayer.encodeList([layer])).single;
+
+    expect(back.kind, LayerKind.stamp);
+    expect(StampSpec.decode(back.content).center, '관람 완료');
+    expect(back.fontSize, 96);
+  });
+
 }

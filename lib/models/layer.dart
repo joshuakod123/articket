@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 /// 에디터 캔버스에 올라가는 요소의 종류.
-enum LayerKind { sticker, text, tape, photo }
+///
+/// 값을 **더할 때는 끝에** 붙이세요. 저장은 이름으로 하지만(`kind.name`),
+/// 중간에 끼워 넣으면 이 enum을 인덱스로 쓰는 코드가 조용히 어긋납니다.
+enum LayerKind { sticker, text, tape, photo, stamp }
 
 /// 스크랩북 캔버스의 레이어 하나.
 ///
@@ -27,6 +30,7 @@ class ScrapLayer {
 
   /// sticker → `art:star` 또는 이모지 / text → 문자열
   /// tape → 무늬 이름(`plain`·`stripe`…) / photo → 파일 경로
+  /// stamp → `모양|윗글자|가운뎃글자|아랫글자` ([StampSpec] 참고)
   String content;
 
   double dx;

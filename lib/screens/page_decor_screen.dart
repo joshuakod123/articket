@@ -18,6 +18,7 @@ import '../widgets/scrap_page.dart';
 import '../widgets/scrapbook.dart';
 import '../widgets/snap.dart';
 import '../widgets/spring.dart';
+import '../widgets/stamp.dart';
 import '../widgets/ticket_canvas.dart';
 import 'scrap_sheets.dart';
 
@@ -222,6 +223,22 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     ));
   }
 
+  Future<void> _addStamp() async {
+    final picked = await pickStamp(context);
+    if (picked == null) return;
+    _place(ScrapLayer(
+      id: _uuid.v4(),
+      kind: LayerKind.stamp,
+      content: picked.spec.encode(),
+      dx: 0.74,
+      dy: 0.78,
+      rotation: -0.12,
+      color: picked.color.toARGB32(),
+      fontSize: picked.size,
+    ));
+    Feel.stamp();
+  }
+
   Future<void> _addTape() async {
     final picked = await pickTape(context);
     if (picked == null) return;
@@ -236,28 +253,82 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     ));
   }
 
+  /// 폴라로이드. 툴바를 누르는 것만으로 시스템 앨범이 열리지 않습니다.
+  /// (에디터와 같은 흐름 — `pickPhotoSource` 주석 참고)
   Future<void> _addPhoto() async {
-    var path = '';
-    try {
-      final shot = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1400,
-        imageQuality: 88,
-      );
-      path = shot?.path ?? '';
-    } catch (e) {
-      if (mounted) PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
-    }
+    final source = await pickPhotoSource(context);
+    if (source == null || !mounted) return;
+
+    final path = await _pickImagePath(source);
     if (!mounted) return;
+    if (source != PhotoSource.blank && path == null) return;
+
     _place(ScrapLayer(
       id: _uuid.v4(),
       kind: LayerKind.photo,
-      content: path,
+      content: path ?? '',
       dx: 0.68,
       dy: 0.62,
       rotation: 0.1,
       color: AppColors.oxbloodDim.toARGB32(),
     ));
+
+    if (path == null || path.isEmpty) {
+      PaperToast.show(context, '빈 폴라로이드를 붙였습니다',
+          detail: '두 번 누르면 사진을 넣을 수 있습니다');
+    }
+  }
+
+  Future<String?> _pickImagePath(PhotoSource source) async {
+    if (source == PhotoSource.blank) return null;
+    try {
+      final shot = await _picker.pickImage(
+        source: source == PhotoSource.camera
+            ? ImageSource.camera
+            : ImageSource.gallery,
+        maxWidth: 1400,
+        imageQuality: 88,
+      );
+      return shot?.path;
+    } catch (e) {
+      if (mounted) PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
+      return null;
+    }
+  }
+
+  // ── 각도 다듬기 ─────────────────────────────────
+  //
+  // ## "회전 버튼이 안 돌아간다"
+  //
+  // 티켓을 고르면 아래 띠에 ↻ 모양(`Icons.restart_alt`)이 떴는데, 그건
+  // **회전이 아니라 초기화** 버튼이었습니다. 아이콘이 원을 그리는 화살표라
+  // 누구나 회전으로 읽었고, 누르면 오히려 각도가 0으로 풀려서
+  // "돌아가지 않는다"고 느꼈습니다. 회전은 두 손가락 제스처로만 됐고,
+  // 티켓처럼 큰 물건 위에서 손가락 두 개를 벌리면 화면이 다 가려집니다.
+  //
+  // 이제 ↺ / ↻ 는 진짜로 돌리고, 초기화는 아이콘과 자리를 따로 씁니다.
+
+  /// 한 번에 도는 각도(7.5°).
+  static const _rotationStep = 0.1309;
+
+  void _rotateTicket(Ticket ticket, double delta) {
+    // 자동 배치에서는 각도를 줘도 화면에 반영되지 않습니다.
+    // 각도를 건드린다는 건 곧 "내가 직접 놓겠다"는 뜻이라, 조용히 넘어갑니다.
+    // (_goFree가 스냅샷을 이미 쌓으므로 여기서 또 쌓지 않습니다)
+    final wasAuto = !(_folder?.freeLayout ?? true);
+    if (wasAuto) _goFree(silent: true);
+    if (!wasAuto) _snapshot();
+
+    Feel.pick();
+    setState(() => ticket.protation += delta);
+    store.touch();
+  }
+
+  void _rotateLayer(ScrapLayer layer, double delta) {
+    _snapshot();
+    Feel.pick();
+    setState(() => layer.rotation += delta);
+    store.touch();
   }
 
   void _remove(ScrapLayer layer) {
@@ -307,20 +378,27 @@ class _PageDecorScreenState extends State<PageDecorScreen>
           ..content = picked.pattern.name
           ..color = picked.color.toARGB32();
 
+      case LayerKind.stamp:
+        final picked = await pickStamp(
+          context,
+          initial: StampSpec.decode(layer.content),
+          color: Color(layer.color),
+          size: layer.fontSize,
+        );
+        if (picked == null) return;
+        _snapshot();
+        layer
+          ..content = picked.spec.encode()
+          ..color = picked.color.toARGB32()
+          ..fontSize = picked.size;
+
       case LayerKind.photo:
-        try {
-          final shot = await _picker.pickImage(
-            source: ImageSource.gallery,
-            maxWidth: 1400,
-            imageQuality: 88,
-          );
-          if (shot == null) return;
-          _snapshot();
-          layer.content = shot.path;
-        } catch (_) {
-          if (mounted) PaperToast.warn(context, '사진을 불러오지 못했습니다');
-          return;
-        }
+        final source = await pickPhotoSource(context);
+        if (source == null || !mounted) return;
+        final path = await _pickImagePath(source);
+        if (source != PhotoSource.blank && path == null) return;
+        _snapshot();
+        layer.content = path ?? '';
     }
     store.touch();
     if (mounted) setState(() {});
@@ -621,14 +699,17 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                     LayerKind.text => '글자',
                     LayerKind.tape => '테이프',
                     LayerKind.photo => '폴라로이드',
+                    LayerKind.stamp => '도장',
                   },
                   onEdit: () => _edit(pickedLayer!),
                   onDelete: () => _remove(pickedLayer!),
+                  onRotate: (d) => _rotateLayer(pickedLayer!, d),
                   onDone: () => setState(() => _selected = null),
                 )
               else if (pickedTicket != null)
                 _TicketBar(
                   ticket: pickedTicket,
+                  onRotate: (d) => _rotateTicket(pickedTicket!, d),
                   onReset: () {
                     _snapshot();
                     setState(() {
@@ -643,6 +724,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
 
               _Toolbar(
                 onSticker: _addSticker,
+                onStamp: _addStamp,
                 onText: _addText,
                 onTape: _addTape,
                 onPhoto: _addPhoto,
@@ -686,7 +768,7 @@ class _LayoutBanner extends StatelessWidget {
             Expanded(
               child: Text(
                 free
-                    ? '티켓을 끌어 옮기고, 두 손가락으로 돌리세요'
+                    ? '티켓을 눌러 고르면 ↺ ↻ 로 돌릴 수 있습니다'
                     : (hasTickets
                     ? '티켓은 자동으로 놓여 있습니다'
                     : '티켓을 만들면 이 페이지에 붙습니다'),
@@ -847,6 +929,12 @@ class _Editable extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onEdit;
 
+  /// 레이어를 줄여도 손잡이는 손끝만 하게 남깁니다.
+  double get _handleScale => (1 / layer.scale).clamp(0.55, 2.0);
+
+  /// 손잡이가 Stack **안쪽**에 온전히 들어앉는 데 필요한 여백.
+  double get _handlePad => _Handle.diameter * _handleScale / 2 + 2;
+
   @override
   Widget build(BuildContext context) {
     final pos = layer.offsetIn(canvas);
@@ -873,32 +961,40 @@ class _Editable extends StatelessWidget {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: selected
-                            ? AppColors.foil.withValues(alpha: 0.9)
-                            : Colors.transparent,
+                  // 손잡이 자리를 여백으로 비워 둡니다.
+                  // Stack 밖(`-13`)에 걸어두면 `RenderBox.hitTest`가 자기
+                  // 크기 밖 좌표를 먼저 걸러내서, 탭이 영영 닿지 않습니다.
+                  Padding(
+                    padding: EdgeInsets.all(_handlePad),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.foil.withValues(alpha: 0.9)
+                              : Colors.transparent,
+                        ),
                       ),
+                      child: buildLayerContent(layer),
                     ),
-                    child: buildLayerContent(layer),
                   ),
                   if (selected) ...[
                     Positioned(
-                      right: -13,
-                      top: -13,
+                      right: 0,
+                      top: 0,
                       child: _Handle(
                           icon: Icons.close,
                           color: AppColors.oxblood,
+                          scale: _handleScale,
                           onTap: onDelete),
                     ),
                     Positioned(
-                      left: -13,
-                      top: -13,
+                      left: 0,
+                      top: 0,
                       child: _Handle(
                           icon: Icons.tune,
                           color: AppColors.ink,
+                          scale: _handleScale,
                           onTap: onEdit),
                     ),
                   ],
@@ -917,11 +1013,18 @@ class _Handle extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.onTap,
+    this.scale = 1,
   });
 
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+
+  /// 바깥 `Transform.scale`을 상쇄하는 배율.
+  final double scale;
+
+  /// 손잡이 지름. 여백 계산이 이 값을 참조합니다.
+  static const diameter = 28.0;
 
   @override
   Widget build(BuildContext context) {
@@ -929,8 +1032,8 @@ class _Handle extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 26,
-        height: 26,
+        width: diameter * scale,
+        height: diameter * scale,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: color,
@@ -944,7 +1047,7 @@ class _Handle extends StatelessWidget {
             ),
           ],
         ),
-        child: Icon(icon, size: 14, color: AppColors.stockLight),
+        child: Icon(icon, size: 15 * scale, color: AppColors.stockLight),
       ),
     );
   }
@@ -955,12 +1058,14 @@ class _SelectedBar extends StatelessWidget {
     required this.name,
     required this.onEdit,
     required this.onDelete,
+    required this.onRotate,
     required this.onDone,
   });
 
   final String name;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final ValueChanged<double> onRotate;
   final VoidCallback onDone;
 
   @override
@@ -968,6 +1073,10 @@ class _SelectedBar extends StatelessWidget {
     return _Bar(
       name: name,
       actions: [
+        _BarAction(Icons.rotate_left, '왼쪽으로 돌리기',
+                () => onRotate(-_PageDecorScreenState._rotationStep)),
+        _BarAction(Icons.rotate_right, '오른쪽으로 돌리기',
+                () => onRotate(_PageDecorScreenState._rotationStep)),
         _BarAction(Icons.tune, '고치기', onEdit),
         _BarAction(Icons.delete_outline, '떼어내기', onDelete,
             color: AppColors.oxblood),
@@ -977,23 +1086,42 @@ class _SelectedBar extends StatelessWidget {
   }
 }
 
+/// 고른 티켓을 다루는 띠.
+///
+/// ↺ / ↻ 는 **실제로 티켓을 돌립니다.** 예전에는 여기 원형 화살표가
+/// 하나뿐이었고 그건 초기화였습니다. 회전으로 오해하고 눌렀다가
+/// 각도가 풀리는 게 이 화면의 가장 흔한 헛발질이었습니다.
 class _TicketBar extends StatelessWidget {
   const _TicketBar({
     required this.ticket,
+    required this.onRotate,
     required this.onReset,
     required this.onDone,
   });
 
   final Ticket ticket;
+
+  /// 라디안 증분.
+  final ValueChanged<double> onRotate;
   final VoidCallback onReset;
   final VoidCallback onDone;
 
   @override
   Widget build(BuildContext context) {
+    final tilted = ticket.protation.abs() > 0.001 || ticket.pscale != 1.0;
+
     return _Bar(
       name: ticket.title.replaceAll('\n', ' '),
       actions: [
-        _BarAction(Icons.restart_alt, '크기·각도 초기화', onReset),
+        _BarAction(Icons.rotate_left, '왼쪽으로 돌리기',
+                () => onRotate(-_PageDecorScreenState._rotationStep)),
+        _BarAction(Icons.rotate_right, '오른쪽으로 돌리기',
+                () => onRotate(_PageDecorScreenState._rotationStep)),
+        // 초기화는 되돌릴 게 있을 때만 나옵니다. 회전 버튼 옆에 늘 떠 있으면
+        // 셋 중 무엇이 회전인지 또 헷갈립니다.
+        if (tilted)
+          _BarAction(Icons.settings_backup_restore, '똑바로 (크기·각도 초기화)',
+              onReset),
         _BarAction(Icons.check, '완료', onDone),
       ],
     );
@@ -1044,11 +1172,15 @@ class _Bar extends StatelessWidget {
                     size: 12, weight: FontWeight.w600, color: AppColors.ink),
               ),
             ),
+            // 회전 버튼이 들어와 최대 다섯 개가 됐습니다. 좁은 화면에서
+            // 이름이 먼저 줄어들도록 버튼 폭을 못 박습니다.
             for (final a in actions)
               IconButton(
                 tooltip: a.tip,
                 onPressed: a.onTap,
                 visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 icon: Icon(a.icon, size: 19, color: a.color ?? AppColors.ink),
               ),
           ],
@@ -1061,12 +1193,14 @@ class _Bar extends StatelessWidget {
 class _Toolbar extends StatelessWidget {
   const _Toolbar({
     required this.onSticker,
+    required this.onStamp,
     required this.onText,
     required this.onTape,
     required this.onPhoto,
   });
 
   final VoidCallback onSticker;
+  final VoidCallback onStamp;
   final VoidCallback onText;
   final VoidCallback onTape;
   final VoidCallback onPhoto;
@@ -1083,12 +1217,16 @@ class _Toolbar extends StatelessWidget {
           const WallGrain(opacity: 0.05, seed: 51),
           SafeArea(
             top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+            // 도장이 늘면서 다섯 칸이 됐습니다. `spaceEvenly`로 밀어 넣으면
+            // 좁은 기기에서 '폴라로이드' 라벨이 잘립니다. 에디터 툴바와
+            // 같은 방식으로, 넘치면 옆으로 밀리게 둡니다.
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _tool(Icons.auto_awesome_outlined, '스티커', onSticker),
+                  _tool(Icons.approval_outlined, '도장', onStamp),
                   _tool(Icons.text_fields, '글자', onText),
                   _tool(Icons.horizontal_rule, '테이프', onTape),
                   _tool(Icons.photo_outlined, '폴라로이드', onPhoto),

@@ -6,6 +6,7 @@ import '../theme/app_text.dart';
 import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
 import '../widgets/scrap_layers.dart';
+import '../widgets/stamp.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 팔레트
@@ -49,6 +50,21 @@ class ScrapPalette {
     Color(0x99E0B8B0),
     Color(0x99C7BBA2),
     Color(0x66251E15),
+  ];
+
+  /// 도장 잉크. 실제 인주·스탬프 패드에 있는 색만 씁니다.
+  /// 스티커 잉크와 달리 **알파를 살짝 낮춰** 아래 글자가 비칩니다.
+  static const stampInks = <Color>[
+    Color(0xE6A5321F), // 주인 (붉은 인주)
+    Color(0xE66B1F1A), // 옥스블러드
+    Color(0xE62F3D4C), // 감청
+    Color(0xE6251E15), // 먹
+    Color(0xE644503F), // 짙은 올리브
+    Color(0xE68C7134), // 황동
+    Color(0xE63B2E5A), // 자수정
+    Color(0xE6C2513A), // 벽돌
+    Color(0xE66E8B7A), // 세이지
+    Color(0xE6B08F5C), // 마닐라
   ];
 
   /// 이모지 스티커. 벡터로 안 만든 것들만 남겼습니다.
@@ -706,4 +722,416 @@ class _TapeSheetState extends State<_TapeSheet> {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 도장
+// ─────────────────────────────────────────────────────────────
+
+class StampChoice {
+  const StampChoice(this.spec, this.color, this.size);
+
+  final StampSpec spec;
+  final Color color;
+
+  /// 짧은 변 지름. `ScrapLayer.fontSize`에 담깁니다.
+  final double size;
+}
+
+/// 도장 고르기 / 고치기.
+///
+/// 미리 만든 문구를 고르고 끝낼 수도 있고, 글자를 직접 파 넣을 수도 있습니다.
+/// 위쪽 미리보기는 **실제로 찍힐 모습 그대로**입니다(잉크 벗겨진 자국 포함).
+Future<StampChoice?> pickStamp(
+    BuildContext context, {
+      StampSpec? initial,
+      Color color = const Color(0xE6A5321F),
+      double size = 92,
+    }) {
+  return showModalBottomSheet<StampChoice>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _StampSheet(initial: initial, color: color, size: size),
+  );
+}
+
+class _StampSheet extends StatefulWidget {
+  const _StampSheet({
+    required this.initial,
+    required this.color,
+    required this.size,
+  });
+
+  final StampSpec? initial;
+  final Color color;
+  final double size;
+
+  @override
+  State<_StampSheet> createState() => _StampSheetState();
+}
+
+class _StampSheetState extends State<_StampSheet> {
+  late StampSpec _spec = widget.initial ?? StampSpec.presets(DateTime.now()).first;
+  late Color _color = widget.color;
+  late double _size = widget.size;
+
+  /// 직접 파 넣기 칸을 펼쳤는지.
+  bool _carving = false;
+
+  late final _center = TextEditingController(text: _spec.center);
+  late final _top = TextEditingController(text: _spec.top);
+  late final _bottom = TextEditingController(text: _spec.bottom);
+
+  @override
+  void initState() {
+    super.initState();
+    for (final c in [_center, _top, _bottom]) {
+      c.addListener(_sync);
+    }
+  }
+
+  void _sync() => setState(() {
+    _spec = _spec.copyWith(
+      center: _center.text,
+      top: _top.text,
+      bottom: _bottom.text,
+    );
+  });
+
+  @override
+  void dispose() {
+    for (final c in [_center, _top, _bottom]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _usePreset(StampSpec p) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _spec = p;
+      _center.text = p.center;
+      _top.text = p.top;
+      _bottom.text = p.bottom;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final presets = StampSpec.presets(DateTime.now());
+
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.82,
+      child: _SheetShell(
+        eyebrow: 'RUBBER STAMP',
+        preview: Container(
+          height: 132,
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.stock,
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Transform.rotate(
+            // 도장은 반듯하게 찍히는 법이 없습니다.
+            angle: -0.09,
+            child: StampMark(spec: _spec, color: _color, size: 100, seed: 7),
+          ),
+        ),
+        action: _primaryButton(
+          widget.initial == null ? '찍기' : '고치기',
+              () {
+            if (_spec.center.trim().isEmpty &&
+                _spec.top.trim().isEmpty &&
+                _spec.bottom.trim().isEmpty) {
+              Navigator.pop(context);
+              return;
+            }
+            Navigator.pop(context, StampChoice(_spec, _color, _size));
+          },
+        ),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const _RailTitle('문구'),
+            SizedBox(
+              height: 86,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: presets.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, i) {
+                  final p = presets[i];
+                  final on = p.encode() == _spec.encode();
+                  return GestureDetector(
+                    onTap: () => _usePreset(p),
+                    child: Container(
+                      width: 96,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.stock,
+                        border: Border.all(
+                          color: on ? AppColors.ink : AppColors.line,
+                          width: on ? 1.6 : 1,
+                        ),
+                      ),
+                      // 미리보기 타일에서는 잉크 자국을 끕니다.
+                      // 작게 줄이면 자국이 때처럼 보입니다.
+                      child: FittedBox(
+                        child: StampMark(
+                          spec: p,
+                          color: _color,
+                          size: 62,
+                          worn: false,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const _RailTitle('테두리'),
+            SizedBox(
+              height: 74,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: StampShape.values.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, i) {
+                  final shape = StampShape.values[i];
+                  final on = shape == _spec.shape;
+                  return GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _spec = _spec.copyWith(shape: shape));
+                    },
+                    child: SizedBox(
+                      width: 74,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            height: 46,
+                            width: 74,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: on ? AppColors.ink : AppColors.line,
+                                width: on ? 1.6 : 1,
+                              ),
+                            ),
+                            child: FittedBox(
+                              child: StampMark(
+                                spec: StampSpec(
+                                    shape: shape, top: '', center: '', bottom: ''),
+                                color: AppColors.ink,
+                                size: 34,
+                                worn: false,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            shape.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.ui(
+                              size: 10,
+                              weight: on ? FontWeight.w600 : FontWeight.w400,
+                              color: on ? AppColors.ink : AppColors.inkSoft,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // ── 직접 파 넣기 ─────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
+              child: Row(
+                children: [
+                  Text('글자 직접 넣기',
+                      style: AppText.ui(
+                          size: 12,
+                          weight: FontWeight.w600,
+                          color: AppColors.inkSoft)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => setState(() => _carving = !_carving),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.oxblood,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text(_carving ? '접기' : '펼치기',
+                        style: AppText.ui(size: 12, weight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+            if (_carving)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
+                child: Column(
+                  children: [
+                    _field(_center, '가운데', '관람 완료'),
+                    _field(_top, _spec.shape.curved ? '위 (둥글게)' : '위', 'ARTICKET'),
+                    _field(_bottom, _spec.shape.curved ? '아래 (둥글게)' : '아래',
+                        '2026.07.14'),
+                  ],
+                ),
+              ),
+
+            const _RailTitle('잉크'),
+            _ColorRail(
+              colors: ScrapPalette.stampInks,
+              selected: _color,
+              onPick: (c) => setState(() => _color = c),
+            ),
+
+            const _RailTitle('크기'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: AppColors.foil,
+                  inactiveTrackColor: AppColors.line,
+                  thumbColor: AppColors.ink,
+                  overlayColor: AppColors.foil.withValues(alpha: 0.12),
+                  trackHeight: 2,
+                ),
+                child: Slider(
+                  value: _size,
+                  min: 48,
+                  max: 150,
+                  divisions: 17,
+                  label: _size.round().toString(),
+                  onChanged: (v) => setState(() => _size = v),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController c, String label, String hint) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        SizedBox(
+          width: 78,
+          child: Text(label,
+              style: AppText.ui(size: 11, color: AppColors.pulp)),
+        ),
+        Expanded(
+          child: TextField(
+            controller: c,
+            maxLines: 1,
+            style: AppText.ui(size: 14, color: AppColors.ink),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: hint,
+              hintStyle: AppText.ui(size: 13, color: AppColors.pulp),
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.line),
+              ),
+              focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.foil, width: 1.4),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 폴라로이드 — 어디서 가져올지 먼저 묻기
+// ─────────────────────────────────────────────────────────────
+
+/// 폴라로이드에 넣을 사진을 **어디서** 가져올지.
+enum PhotoSource {
+  gallery('갤러리에서 고르기', '앨범을 엽니다', Icons.photo_library_outlined),
+  camera('지금 찍기', '카메라를 엽니다', Icons.photo_camera_outlined),
+  blank('비워 두기', '색만 채운 채 붙이고, 나중에 사진을 넣습니다',
+      Icons.crop_original_outlined);
+
+  const PhotoSource(this.label, this.detail, this.icon);
+
+  final String label;
+  final String detail;
+  final IconData icon;
+}
+
+/// 폴라로이드 출처 고르기.
+///
+/// ## 왜 한 단계를 더 뒀나
+///
+/// 예전에는 툴바의 '폴라로이드'를 누르는 즉시 시스템 갤러리가 떴습니다.
+/// 그래서 **툴바를 훑어보기만 해도** 앨범 권한창과 로딩이 튀어나왔고,
+/// 되돌아오려면 시스템 화면을 닫아야 했습니다. 도구를 구경하는 것과
+/// 사진을 고르겠다고 결정하는 건 다른 일입니다.
+///
+/// 이 시트는 얇고 즉시 뜨며, 아래로 쓸어내리면 아무 일도 없이 닫힙니다.
+Future<PhotoSource?> pickPhotoSource(BuildContext context) {
+  return showModalBottomSheet<PhotoSource>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _SheetShell(
+      eyebrow: 'POLAROID',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final s in PhotoSource.values)
+            InkWell(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.pop(context, s);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                child: Row(
+                  children: [
+                    Icon(s.icon, size: 21, color: AppColors.foil),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(s.label,
+                              style: AppText.ui(
+                                  size: 14,
+                                  weight: FontWeight.w600,
+                                  color: AppColors.ink)),
+                          const SizedBox(height: 2),
+                          Text(s.detail,
+                              style: AppText.ui(
+                                  size: 11.5, color: AppColors.inkSoft)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right,
+                        size: 18, color: AppColors.pulp),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }

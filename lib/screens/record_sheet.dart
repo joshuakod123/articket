@@ -132,7 +132,7 @@ class _RecordSheetState extends State<RecordSheet> {
             child: PaperSurface(
               color: AppColors.stockLight,
               grain: 0.055,
-              seed: widget.ticket.serial.hashCode,
+              seed: widget.ticket.id.hashCode,
               child: const SizedBox.expand(),
             ),
           ),

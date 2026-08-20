@@ -120,16 +120,20 @@ class BarcodePainter extends CustomPainter {
   bool shouldRepaint(BarcodePainter old) => old.seed != seed;
 }
 
-/// 바코드 + 일련번호 묶음.
+/// 바코드 줄무늬.
+///
+/// 씨앗으로는 **[Ticket.id]** 를 넘기세요. 발권 번호를 넘기면 티켓을 하나
+/// 지웠을 때 뒤 티켓들의 번호가 당겨지면서 바코드 무늬까지 통째로 바뀝니다.
 class Barcode extends StatelessWidget {
   const Barcode({
     super.key,
-    required this.serial,
+    required this.seed,
     this.height = 26,
     this.color = AppColors.ink,
   });
 
-  final String serial;
+  /// 무늬를 정하는 고정 씨앗.
+  final String seed;
   final double height;
   final Color color;
 
@@ -138,7 +142,7 @@ class Barcode extends StatelessWidget {
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: CustomPaint(painter: BarcodePainter(seed: serial, color: color)),
+      child: CustomPaint(painter: BarcodePainter(seed: seed, color: color)),
     );
   }
 }

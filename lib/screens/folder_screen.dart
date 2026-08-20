@@ -354,14 +354,13 @@ class _FolderScreenState extends State<FolderScreen> {
 
   void _create() {
     final id = const Uuid().v4();
-    final seq = store.tickets.length + 1;
+    // 발권 번호는 여기서 만들지 않습니다. store가 관람일 기준으로 매깁니다.
     final ticket = Ticket(
       id: id,
       folderId: widget.folder.id,
       title: '제목 없는 전시',
       venue: '장소 미정',
       visitedAt: DateTime.now(),
-      serial: 'AK-${DateTime.now().year}-${seq.toString().padLeft(5, '0')}',
       posterTint: [widget.folder.color, AppColors.ink],
     );
     store.add(ticket);

@@ -64,11 +64,8 @@ class ProfileScreen extends StatelessWidget {
               rated.length;
 
           // 가장 오래된 기록의 해 = 관람을 시작한 해.
-          final since = tickets.isEmpty
-              ? now.year
-              : tickets
-              .map((t) => t.visitedAt.year)
-              .reduce((a, b) => a < b ? a : b);
+          // 회원 번호도 같은 값에서 나옵니다(TicketStore.memberSerialText).
+          final since = store.joinedYear;
 
           // 최근에 본 것 여섯.
           final recent = tickets.toList()
@@ -102,6 +99,7 @@ class ProfileScreen extends StatelessWidget {
                     child: _MemberPlate(
                       total: tickets.length,
                       since: since,
+                      serial: store.memberSerialText,
                     ),
                   ),
                   const SizedBox(height: 22),
@@ -256,17 +254,31 @@ class ProfileScreen extends StatelessWidget {
 /// 리넨 클로스로 싼 짙은 옥스블러드 카드. 오른쪽에는 도록 표지처럼 **연도를
 /// 세로로 눕혀** 크게 깔고, 왼쪽에 이름과 발급 정보를 얹었습니다.
 /// 이름을 누르면 그 자리에서 고칠 수 있습니다.
+///
+/// ## 한 장 안에서 연도가 두 개였던 문제
+///
+/// 세로로 깔린 큰 숫자와 "○○년부터"는 **가장 오래된 기록의 해**(2025)를,
+/// 아래쪽 번호는 `DateTime.now().year`(2026)를 쓰고 있었습니다. 게다가 그
+/// 번호의 뒷자리가 **티켓 장수**여서, 티켓을 한 장 더 만들면 회원 번호가
+/// 조용히 바뀌었습니다. 회원 번호가 그러면 안 됩니다.
+///
+/// 이제 카드 안의 모든 숫자가 [TicketStore.joinedYear] 하나에서 나오고,
+/// 그게 무슨 뜻인지 `MEMBER SINCE`로 못 박아 둡니다.
 class _MemberPlate extends StatelessWidget {
-  const _MemberPlate({required this.total, required this.since});
+  const _MemberPlate({
+    required this.total,
+    required this.since,
+    required this.serial,
+  });
 
   final int total;
   final int since;
 
+  /// 회원 번호(`M-2025-0006`). 티켓 발권 번호와 모양이 다릅니다.
+  final String serial;
+
   @override
   Widget build(BuildContext context) {
-    final serial =
-        'AK-${DateTime.now().year}-${total.toString().padLeft(4, '0')}';
-
     return DecoratedBox(
       decoration: BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
       // 비율을 못 박습니다. ListView 안에서 높이가 무한으로 새지 않는 유일한 방법.
@@ -317,7 +329,8 @@ class _MemberPlate extends StatelessWidget {
                                 color: Colors.white
                                     .withValues(alpha: 0.85))),
                         const Spacer(),
-                        Text('MEMBER',
+                        // 세로로 깔린 큰 연도가 무슨 숫자인지 여기서 밝힙니다.
+                        Text('MEMBER SINCE $since',
                             style: AppText.eyebrow(
                                 size: 8,
                                 color:
@@ -372,6 +385,12 @@ class _MemberPlate extends StatelessWidget {
                     const SizedBox(height: 9),
                     Row(
                       children: [
+                        Text('NO.',
+                            style: AppText.eyebrow(
+                                size: 7.5,
+                                color: Colors.white
+                                    .withValues(alpha: 0.35))),
+                        const SizedBox(width: 6),
                         Text(serial,
                             style: AppText.data(
                                 size: 9.5,

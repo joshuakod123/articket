@@ -102,7 +102,7 @@ class Ticket {
     required this.title,
     required this.venue,
     required this.visitedAt,
-    required this.serial,
+    this.serial = '',
     this.genre = '미술',
     this.frame = TicketFrame.classic,
     this.rating = 0,
@@ -126,8 +126,12 @@ class Ticket {
   String venue;
   DateTime visitedAt;
 
-  /// 발권 번호. 고정폭으로 렌더링합니다.
-  final String serial;
+  /// 발권 번호(`AK-2026-014`). 고정폭으로 렌더링합니다.
+  ///
+  /// **여기에 직접 쓰지 마세요.** 이 값은 [TicketStore]가 티켓 목록 전체를 보고
+  /// 다시 매깁니다(`lib/data/serial.dart` 참고). 만들 때 비워두면 됩니다.
+  /// 종이 결·바코드처럼 "변하면 안 되는" 씨앗은 [serial]이 아니라 [id]를 씁니다.
+  String serial;
 
   String genre;
   TicketFrame frame;
