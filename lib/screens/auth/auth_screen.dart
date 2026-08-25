@@ -329,7 +329,11 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          const Positioned.fill(child: WallGrain(opacity: 0.05, seed: 11)),
+          // ⚠️ `Positioned.fill`로 감싸지 마세요. [WallGrain]은 이미 자기가
+          // `Positioned.fill`입니다. 두 번 감싸면 같은 RenderObject에
+          // `StackParentData`를 쓰는 ParentDataWidget이 둘이 되어
+          // "Competing ParentDataWidgets" 어서션이 납니다.
+          const WallGrain(opacity: 0.05, seed: 11),
 
           SafeArea(
             child: AutofillGroup(

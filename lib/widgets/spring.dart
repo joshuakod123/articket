@@ -67,6 +67,21 @@ class SpringSettle {
 
   bool get isRunning => _x.isAnimating || _y.isAnimating;
 
+  /// 이번 fling 에 붙인 리스너. 떼어낼 때 필요해서 들고 있습니다.
+  ///
+  /// 예전에는 `AnimationController.clearListeners()` 를 불렀는데, 그건
+  /// `AnimationLocalListenersMixin` 의 `@protected` 멤버라 바깥에서 부르면
+  /// 안 됩니다(analyzer: invalid_use_of_protected_member). 게다가 **누가
+  /// 붙였든 전부** 지워버려서, 나중에 같은 컨트롤러를 다른 곳에서 듣게 되면
+  /// 조용히 끊깁니다. 내가 붙인 것만 정확히 뗍니다.
+  VoidCallback? _onX;
+  VoidCallback? _onY;
+
+  /// 몇 번째 fling 인지. `whenCompleteOrCancel` 은 마이크로태스크로 늦게
+  /// 오기 때문에, 새 fling 이 시작되면서 취소된 **옛 fling 의 뒷정리**가
+  /// 방금 붙인 새 리스너를 떼어가는 일이 생깁니다. 세대가 다르면 무시합니다.
+  int _generation = 0;
+
   void fling({
     required Offset from,
     required Offset velocity,
@@ -86,22 +101,27 @@ class SpringSettle {
       (from.dy + velocity.dy * _carry).clamp(bounds.top, bounds.bottom),
     );
 
+    final generation = ++_generation;
+
     var current = from;
     void push() => onUpdate(current);
 
+    _onX = () {
+      current = Offset(_x.value.clamp(bounds.left, bounds.right), current.dy);
+      push();
+    };
+    _onY = () {
+      current = Offset(current.dx, _y.value.clamp(bounds.top, bounds.bottom));
+      push();
+    };
+
     _x
       ..value = from.dx
-      ..addListener(() {
-        current = Offset(_x.value.clamp(bounds.left, bounds.right), current.dy);
-        push();
-      });
+      ..addListener(_onX!);
 
     _y
       ..value = from.dy
-      ..addListener(() {
-        current = Offset(current.dx, _y.value.clamp(bounds.top, bounds.bottom));
-        push();
-      });
+      ..addListener(_onY!);
 
     _x.animateWith(
       SpringSimulation(PaperSpring.paper, from.dx, target.dx, velocity.dx),
@@ -112,6 +132,7 @@ class SpringSettle {
       SpringSimulation(PaperSpring.paper, from.dy, target.dy, velocity.dy),
     )
         .whenCompleteOrCancel(() {
+      if (generation != _generation) return;
       _clearListeners();
       onSettled?.call();
     });
@@ -124,11 +145,18 @@ class SpringSettle {
   }
 
   void _clearListeners() {
-    _x.clearListeners();
-    _y.clearListeners();
+    if (_onX != null) {
+      _x.removeListener(_onX!);
+      _onX = null;
+    }
+    if (_onY != null) {
+      _y.removeListener(_onY!);
+      _onY = null;
+    }
   }
 
   void dispose() {
+    _clearListeners();
     _x.dispose();
     _y.dispose();
   }

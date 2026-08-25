@@ -1,4 +1,7 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
@@ -19,21 +22,71 @@ class GrainPainter extends CustomPainter {
   /// 섬유 결의 양. 0이면 반점만 찍습니다.
   final double fiber;
 
+  /// 밝기 · 크기를 몇 단계로 뭉칠지. 단계를 늘릴수록 원본에 가깝지만
+  /// 그만큼 draw 호출이 늘어납니다. 4 × 3 이면 눈으로는 구분이 안 됩니다.
+  static const _alphaSteps = 4;
+  static const _sizeSteps = 3;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+
     final rng = math.Random(seed);
     final area = size.width * size.height;
-    final paint = Paint();
 
     // 1) 종이 반점.
+    //
+    // 예전에는 점 하나마다 `drawCircle`을 불렀습니다. 전체 화면이면
+    // **한 번 그릴 때 2400번**입니다. 화면이 갈아 끼워지는 순간에는 나가는
+    // 화면과 들어오는 화면의 결이 같은 프레임에서 처음 그려지므로 그 값이
+    // 두 배가 되고, 그 프레임이 눈에 띄게 밀립니다.
+    //
+    // 난수 소비 순서는 그대로 두고(= 무늬가 바뀌지 않습니다) 밝기·크기가
+    // 비슷한 점끼리 묶어 `drawRawPoints`로 한 번에 찍습니다.
+    // 2400회 → 최대 24회.
     final speckles = (area / 90).clamp(60, 2400).toInt();
+    final buckets = List.generate(
+      2 * _alphaSteps * _sizeSteps,
+          (_) => <double>[],
+      growable: false,
+    );
+
     for (var i = 0; i < speckles; i++) {
       final x = rng.nextDouble() * size.width;
       final y = rng.nextDouble() * size.height;
       final dark = rng.nextBool();
-      paint.color = (dark ? Colors.black : Colors.white)
-          .withValues(alpha: opacity * rng.nextDouble());
-      canvas.drawCircle(Offset(x, y), rng.nextDouble() * 0.9, paint);
+      final alpha = rng.nextDouble();
+      final radius = rng.nextDouble() * 0.9;
+
+      final ai = (alpha * _alphaSteps).floor().clamp(0, _alphaSteps - 1);
+      final si = (radius / 0.9 * _sizeSteps).floor().clamp(0, _sizeSteps - 1);
+      final b = ((dark ? 1 : 0) * _alphaSteps + ai) * _sizeSteps + si;
+
+      buckets[b]
+        ..add(x)
+        ..add(y);
+    }
+
+    // `StrokeCap.round` + `PointMode.points` = 지름이 strokeWidth 인 동그란 점.
+    final paint = Paint()..strokeCap = StrokeCap.round;
+    for (var b = 0; b < buckets.length; b++) {
+      final pts = buckets[b];
+      if (pts.isEmpty) continue;
+
+      final si = b % _sizeSteps;
+      final ai = (b ~/ _sizeSteps) % _alphaSteps;
+      final dark = b ~/ (_sizeSteps * _alphaSteps) == 1;
+
+      paint
+        ..color = (dark ? Colors.black : Colors.white)
+            .withValues(alpha: opacity * (ai + 0.5) / _alphaSteps)
+        ..strokeWidth = 2 * 0.9 * (si + 0.5) / _sizeSteps;
+
+      canvas.drawRawPoints(
+        ui.PointMode.points,
+        Float32List.fromList(pts),
+        paint,
+      );
     }
 
     if (fiber <= 0) return;
@@ -69,6 +122,19 @@ class GrainPainter extends CustomPainter {
 }
 
 /// 화면 전체에 얹는 속지 질감. 콘텐츠 위에 아주 옅게 깝니다.
+///
+/// ⚠️ 이 위젯은 **자기 자신이 이미 `Positioned.fill`** 입니다.
+/// `Stack`의 자식으로 그냥 넣으세요.
+///
+/// ```dart
+/// Stack(children: [ ..., const WallGrain(opacity: .05, seed: 11) ])
+/// ```
+///
+/// `Positioned.fill(child: WallGrain(...))`처럼 한 번 더 감싸면 같은
+/// RenderObject에 `StackParentData`를 쓰는 ParentDataWidget이 둘이 되어
+/// "Competing ParentDataWidgets are providing parent data to the same
+/// RenderObject" 어서션이 납니다. (실제로 `auth_screen.dart`가 그랬고,
+/// 로그아웃해서 로그인 화면이 지어질 때마다 이 예외가 떴습니다.)
 class WallGrain extends StatelessWidget {
   const WallGrain({super.key, this.opacity = 0.035, this.seed = 3});
 
