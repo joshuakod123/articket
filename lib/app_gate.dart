@@ -41,14 +41,19 @@ class _AppGateState extends State<AppGate> {
   }
 
   Future<void> _boot() async {
-    // 세 가지를 **나란히** 기다립니다.
-    // 순서대로 기다리면 스플래시가 그만큼 길어집니다.
-    await Future.wait([
-      _auth.restore(),
-      _store.load(),
-      Future<void>.delayed(SplashScreen.minimumHold),
-    ]);
-    if (mounted) setState(() => _held = true);
+    try {
+      await Future.wait([
+        _auth.restore(),
+        _store.load(),
+        Future<void>.delayed(SplashScreen.minimumHold),
+      ]);
+    } catch (e, s) {
+      debugPrint('부팅 실패: $e\n$s');
+      // 세션을 못 읽었으면 로그아웃 상태로 봅니다. 최소한 로그인 화면은 뜹니다.
+      if (_auth.stage == AuthStage.unknown) await _auth.signOut();
+    } finally {
+      if (mounted) setState(() => _held = true);
+    }
   }
 
   @override
@@ -67,8 +72,18 @@ class _AppGateState extends State<AppGate> {
 
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 420),
-          switchInCurve: Curves.easeOut,
+          switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeIn,
+          // 0.985 → 1.0. 이 이상 주면 "확대"로 읽혀서 화면이 튑니다.
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.985, end: 1.0).animate(
+                CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+              ),
+              child: child,
+            ),
+          ),
           child: screen,
         );
       },

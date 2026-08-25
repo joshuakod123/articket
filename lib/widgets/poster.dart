@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import 'holo_foil.dart';
-import 'paper.dart';
 
 /// 티켓의 포스터 영역.
 ///

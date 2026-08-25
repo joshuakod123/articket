@@ -7,7 +7,6 @@ import '../data/ticket_store.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
-import '../theme/folder_style.dart';
 import '../widgets/paper.dart';
 import '../widgets/scaled_canvas.dart';
 import '../widgets/scrap_page.dart';

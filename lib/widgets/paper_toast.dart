@@ -184,6 +184,7 @@ class _Slip extends StatelessWidget {
             grain: 0.07,
             seed: message.hashCode,
             fiber: 0.7,
+          child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -238,6 +239,7 @@ class _Slip extends StatelessWidget {
                 ),
               ],
             ),
+           ),
           ),
 
           // 왼쪽 위 모서리에 붙인 마스킹 테이프.

@@ -26,7 +26,7 @@ class ArticketLoadingView extends StatelessWidget {
       backgroundColor: AppColors.bg,
       body: Stack(
         children: [
-          const Positioned.fill(child: WallGrain(opacity: 0.05)),
+          const WallGrain(opacity: 0.05),
           Center(child: StackingLoader(label: label)),
         ],
       ),

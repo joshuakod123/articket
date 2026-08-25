@@ -76,7 +76,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
       ),
       body: Stack(
         children: [
-          const Positioned.fill(child: WallGrain(opacity: 0.05, seed: 41)),
+          const WallGrain(opacity: 0.05, seed: 41),
           ListView(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 44),
             children: [

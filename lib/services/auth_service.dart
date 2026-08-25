@@ -155,6 +155,20 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 이 기기에 저장된 계정의 이메일. 로그인 화면 자동 채우기용.
+  ///
+  /// 계정이 하나뿐인 저장 방식이라 "누구로 로그인할지"는 물어볼 필요가
+  /// 없습니다. 서버가 붙어 여러 계정이 가능해지면 이 메서드는 **마지막으로
+  /// 로그인한 이메일**을 돌려주도록 바뀌어야 합니다(세션 키에 남겨두세요).
+  ///
+  /// 비밀번호는 절대 돌려주지 않습니다. 해시만 갖고 있기도 하고,
+  /// 갖고 있더라도 화면으로 올려보낼 값이 아닙니다.
+  Future<String?> knownEmail() async {
+    final account = await _local.readMap(LocalStore.kAccount);
+    final email = account?['email'];
+    return email is String && email.isNotEmpty ? email : null;
+  }
+
   // ── 프로필 ──────────────────────────────────────
 
   Future<void> rename(String name) async {
@@ -259,18 +273,18 @@ class Viewer {
 
   factory Viewer.fromJson(Map<String, dynamic> j) => Viewer(
     email: j['email'] as String? ?? '',
-    name: j['name'] as String? ?? '이름 없는 관람자',
+    name: j['name'] as String? ?? '이름 없음',   // ← '이름 없는 관람자'
     joinedAt:
     DateTime.tryParse(j['joinedAt'] as String? ?? '') ?? DateTime.now(),
   );
 }
 
 enum AuthFailure {
-  badEmail('이메일 주소를 다시 확인해주세요'),
-  weakPassword('비밀번호는 8자 이상이어야 합니다'),
-  emptyName('부를 이름이 필요합니다'),
-  alreadyExists('이 기기에 이미 계정이 있습니다'),
-  wrongCredentials('이메일이나 비밀번호가 맞지 않습니다');
+  badEmail('이메일 주소를 다시 봐주세요'),
+  weakPassword('8자 이상으로 해주세요'),
+  emptyName('이름을 적어주세요'),
+  alreadyExists('이 기기엔 이미 계정이 있어요'),
+  wrongCredentials('이메일이나 비밀번호가 맞지 않아요');
 
   const AuthFailure(this.message);
 

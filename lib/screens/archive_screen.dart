@@ -6,7 +6,6 @@ import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/folder_open_route.dart';
-import '../widgets/folder_texture.dart';
 import '../widgets/index_tab.dart';
 import '../widgets/masthead.dart';
 import '../widgets/paper.dart';

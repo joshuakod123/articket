@@ -32,7 +32,7 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          const Positioned.fill(child: WallGrain(opacity: 0.05, seed: 29)),
+          const WallGrain(opacity: 0.05, seed: 29),
           ListenableBuilder(
             listenable: auth,
             builder: (context, _) {

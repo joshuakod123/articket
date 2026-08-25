@@ -134,7 +134,7 @@ const _slips = <_Slip>[
     top: 0.62,
     angle: -0.035,
     color: AppColors.oxblood,
-    stamp: 'ADMIT',
+    stamp: 'TICKET',
   ),
 ];
 
