@@ -36,8 +36,8 @@ enum SyncState { idle, syncing, offline, error }
 ///
 /// ## 해법: 내용 해시 그림자(shadow)
 ///
-/// "서버가 갖고 있는 것"의 해시를 id 별로 들고 있습니다. `touch()` 가 불릴
-/// 때마다 지금 내용의 해시와 비교합니다. 다른 것만 더러운(dirty) 것입니다.
+/// "서버가 갖고 있는 것"의 해시를 id 별로 들고 있습니다. [_rescan] 이 지금
+/// 내용의 해시와 비교합니다. 다른 것만 더러운(dirty) 것입니다.
 ///
 /// * 호출부를 **한 줄도** 안 고칩니다. `_changed()` 에 한 줄만 넣습니다.
 /// * 되돌리기로 원상복구된 수정은 해시가 같으므로 **안 올라갑니다.**
@@ -57,12 +57,6 @@ enum SyncState { idle, syncing, offline, error }
 /// 레코드 단위 last-write-wins 입니다. 티켓 하나는 통째로 한 문서입니다.
 /// 필드 단위로 병합하면 "포스터는 폰 것, 별점은 태블릿 것"인 티켓이 나오는데,
 /// 사용자는 그걸 자기가 만든 적이 없습니다.
-///
-/// 비교하는 두 시각의 출처가 다르다는 걸 알고 있습니다 — 로컬은 기기 시계,
-/// 원격은 서버 시계입니다. 기기 시계가 크게 틀어져 있으면 결과가 틀립니다.
-/// 대신 그 피해는 **한 사람이 두 기기에서 같은 티켓을 동시에 고친 경우**로
-/// 한정됩니다. 이 앱에서 한 달에 몇 번이나 일어날 일인지 생각하면, 매 저장마다
-/// 서버 왕복을 한 번 더 하는 것보다 이 위험을 받는 쪽이 낫습니다.
 class SyncService extends ChangeNotifier {
   SyncService._();
 
@@ -74,6 +68,9 @@ class SyncService extends ChangeNotifier {
   static const kShadow = 'articket.sync.shadow.v1';
   static const kCursor = 'articket.sync.cursor.v1';
   static const kGrave = 'articket.sync.grave.v1';
+
+  /// 한 번 오갈 때 기다리는 최대 시간.
+  static const _budget = Duration(seconds: 45);
 
   /// id → 서버가 갖고 있는 내용의 해시.
   final Map<String, String> _shadow = {};
@@ -126,6 +123,16 @@ class SyncService extends ChangeNotifier {
   /// **`TicketStore._changed()` 에서 부릅니다. 이 앱에서 이 한 줄이 전부입니다.**
   void noteChange() {
     if (!_attached || !_store.isReady) return;
+    _rescan();
+
+    // 스티커를 끄는 동안 매 프레임 올리지 않습니다. 손을 놓고 3초 뒤 한 번.
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(seconds: 3), () => unawaited(syncNow()));
+  }
+
+  /// 지금 내용과 그림자를 비교해 더러운 것 · 지워진 것을 표시합니다.
+  void _rescan() {
+    if (!_attached || !_store.isReady) return;
 
     final now = DateTime.now();
     final live = <String>{};
@@ -146,10 +153,6 @@ class SyncService extends ChangeNotifier {
         _dirtyAt.remove(id);
       }
     }
-
-    // 스티커를 끄는 동안 매 프레임 올리지 않습니다. 손을 놓고 3초 뒤 한 번.
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(seconds: 3), () => unawaited(syncNow()));
   }
 
   // ── 동기화 ──────────────────────────────────────
@@ -163,9 +166,10 @@ class SyncService extends ChangeNotifier {
     try {
       if (full) _cursor = null;
 
-      await _pull();
-      await _push();
-      await PosterStorage.instance.syncPhotos(_store.tickets);
+      // 타임아웃을 개별 쿼리마다 걸지 않고 **한 번에** 겁니다.
+      // (postgrest 빌더에 .timeout 을 직접 붙이는 건 버전마다 동작이 달라서
+      //  컴파일이 되는데도 엉뚱하게 도는 경우가 있습니다)
+      await _roundTrip().timeout(_budget);
 
       _lastSyncedAt = DateTime.now();
       await _persistMeta();
@@ -182,11 +186,28 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  Future<void> _roundTrip() async {
+    await _pull();
+    await _push();
+
+    // 사진은 마지막입니다. 티켓 행보다 훨씬 무겁습니다.
+    final touched = await PosterStorage.instance.syncPhotos(_store.tickets);
+
+    // 업로드가 끝나면 `posterKey` 가 채워집니다. 그 값은 **행에도 들어가야**
+    // 다른 기기가 사진을 찾을 수 있습니다. 그래서 한 번 더 밀어 올립니다.
+    if (touched) {
+      _rescan();
+      await _push();
+      _store.touch(); // 로컬에도 posterKey/posterPath 를 저장
+    }
+  }
+
   /// 나가기 전에 밀어 올리기만. 받아오지 않습니다.
   Future<void> pushPending() async {
     if (!_canSync || !_store.isReady) return;
     try {
-      await _push();
+      _rescan();
+      await _push().timeout(const Duration(seconds: 15));
       await _persistMeta();
     } catch (_) {}
   }
@@ -204,8 +225,7 @@ class SyncService extends ChangeNotifier {
           .eq('user_id', uid)
           .gt('updated_at', cursor)
           .order('updated_at')
-          .limit(200)
-          .timeout(const Duration(seconds: 20));
+          .limit(200);
 
       final tickets = await sb
           .from('tickets')
@@ -213,8 +233,7 @@ class SyncService extends ChangeNotifier {
           .eq('user_id', uid)
           .gt('updated_at', cursor)
           .order('updated_at')
-          .limit(200)
-          .timeout(const Duration(seconds: 20));
+          .limit(200);
 
       if (folders.isEmpty && tickets.isEmpty) break;
 
@@ -278,6 +297,8 @@ class SyncService extends ChangeNotifier {
 
     // 이 기기에 이미 사진이 내려와 있으면 경로를 물려줍니다.
     // 서버 행에는 로컬 경로가 없으므로, 안 물려주면 사진이 사라져 보입니다.
+    // **해시를 뜨기 전에** 넣어야 합니다. 안 그러면 방금 받은 티켓이 곧바로
+    // 더러운 것으로 잡혀 서버로 되올라갑니다.
     incoming.posterPath = _store.byId(id)?.posterPath;
 
     _store.upsertQuiet(incoming);
@@ -332,10 +353,7 @@ class SyncService extends ChangeNotifier {
       dirtyFolders.add(RemoteStore.folderRow(f, uid, i));
     }
     if (dirtyFolders.isNotEmpty) {
-      await sb
-          .from('folders')
-          .upsert(dirtyFolders)
-          .timeout(const Duration(seconds: 25));
+      await sb.from('folders').upsert(dirtyFolders);
       for (final f in folders) {
         if (!_dirtyAt.containsKey(f.id)) continue;
         _shadow[f.id] = _hash(f.toJson());
@@ -353,8 +371,7 @@ class SyncService extends ChangeNotifier {
       final chunk = dirtyTickets.sublist(i, end);
       await sb
           .from('tickets')
-          .upsert([for (final t in chunk) RemoteStore.ticketRow(t, uid)])
-          .timeout(const Duration(seconds: 25));
+          .upsert([for (final t in chunk) RemoteStore.ticketRow(t, uid)]);
       for (final t in chunk) {
         _shadow[t.id] = _hash(t.toJson());
         _dirtyAt.remove(t.id);
@@ -370,8 +387,7 @@ class SyncService extends ChangeNotifier {
             .from(table)
             .update({'deleted_at': stamp})
             .inFilter('id', ids)
-            .eq('user_id', uid)
-            .timeout(const Duration(seconds: 20));
+            .eq('user_id', uid);
       }
       await PosterStorage.instance.removeRemote(ids);
       for (final id in ids) {
@@ -448,7 +464,7 @@ class SyncService extends ChangeNotifier {
     final s = e.toString();
     return s.contains('SocketException') ||
         s.contains('Failed host lookup') ||
-        s.contains('Connection');
+        s.contains('ClientException');
   }
 
   void _set(SyncState s) {

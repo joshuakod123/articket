@@ -16,9 +16,9 @@ import 'auth_service.dart';
 /// 로 복사"가 열린 항목으로 남아 있습니다. **서버보다 이게 먼저입니다.**
 ///
 /// `image_picker` 가 돌려주는 경로는 **캐시 디렉터리**입니다. iOS 는 저장공간이
-/// 부족하면 예고 없이 비우고, 안드로이드도 마찬가지입니다. 앱을 업데이트해도
-/// 날아갑니다. 즉 지금 상태로 서버에 올리면, 사용자가 사진을 고른 그 세션에
-/// 동기화가 안 돌면 그 사진은 **원본이 이미 없습니다.** 올릴 것도 없습니다.
+/// 부족하면 예고 없이 비우고, 앱을 업데이트해도 날아갑니다. 즉 지금 상태로
+/// 서버에 올리면, 사진을 고른 그 세션에 동기화가 안 돌면 그 사진은 **원본이
+/// 이미 없습니다.** 올릴 것도 없습니다.
 ///
 /// ```
 ///   image_picker  →  adopt()  →  문서 디렉터리(영구)  →  syncPhotos()  →  Storage
@@ -50,8 +50,9 @@ class PosterStorage {
   // ── 1. 고른 사진을 영구 보관 ─────────────────────
 
   /// `image_picker` 가 준 임시 파일을 문서 디렉터리로 복사하고 새 경로를 줍니다.
-  /// 사진을 고른 **직후** 부르세요. 실패하면 원본 경로를 그대로 돌려줍니다
-  /// (복사에 실패했다고 사진 선택 자체를 취소시키는 건 과합니다).
+  ///
+  /// 사진을 고른 **직후** 부르세요. 복사에 실패하면 원본 경로를 그대로
+  /// 돌려줍니다 — 복사가 안 됐다고 사진 선택 자체를 취소시키는 건 과합니다.
   Future<String> adopt(String tempPath, String ticketId) async {
     try {
       final src = File(tempPath);
@@ -70,12 +71,18 @@ class PosterStorage {
 
   /// 올릴 것은 올리고, 내려받을 것은 내려받습니다. [SyncService] 가 부릅니다.
   ///
+  /// 하나라도 바뀌었으면 true 를 돌려줍니다. 호출부가 그걸 보고 `posterKey`
+  /// 를 행에 한 번 더 밀어 올립니다 — 이게 없으면 사진은 스토리지에 올라가
+  /// 있는데 티켓 행에는 경로가 없어서, **다른 기기가 사진을 못 찾습니다.**
+  ///
   /// 사진은 티켓 행보다 훨씬 무겁습니다. 실패해도 **던지지 않습니다** —
   /// 사진 하나가 안 올라갔다고 티켓 40장의 동기화를 되돌릴 이유가 없습니다.
-  Future<void> syncPhotos(List<Ticket> tickets) async {
-    if (!SupabaseEnv.isConfigured) return;
+  Future<bool> syncPhotos(List<Ticket> tickets) async {
+    if (!SupabaseEnv.isConfigured) return false;
     final uid = AuthService.instance.viewer?.id;
-    if (uid == null || uid.isEmpty) return;
+    if (uid == null || uid.isEmpty) return false;
+
+    var changed = false;
 
     for (final t in tickets) {
       try {
@@ -92,6 +99,7 @@ class PosterStorage {
             fileOptions: const FileOptions(upsert: true),
           );
           t.posterKey = key;
+          changed = true;
           continue;
         }
 
@@ -102,11 +110,13 @@ class PosterStorage {
           File('${(await _posterDir).path}/${t.id}${_ext(t.posterKey!)}');
           await dst.writeAsBytes(bytes, flush: true);
           t.posterPath = dst.path;
+          changed = true;
         }
       } catch (e) {
         debugPrint('[poster] ${t.id}: $e');
       }
     }
+    return changed;
   }
 
   /// 티켓이 지워질 때 서버 사진도 같이. 묘비만 세우면 파일은 계속 요금을 씁니다.
@@ -131,6 +141,8 @@ class PosterStorage {
   }
 
   /// 탈퇴 뒤 기기에 남은 사진 정리. `LocalStore.wipe()` 는 이걸 모릅니다.
+  ///
+  /// 플러그인이 없는 환경(위젯 테스트)에서도 던지지 않습니다.
   Future<void> wipeLocal() async {
     try {
       final docs = await getApplicationDocumentsDirectory();

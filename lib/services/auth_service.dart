@@ -29,8 +29,7 @@ enum AuthStage {
 /// [stage] · [viewer] · [signUp] · [signIn] · [signOut] · [rename] ·
 /// [changePassword] · [deleteAccount] · [knownEmail] 의 시그니처가 그대로입니다.
 /// `auth_screen.dart`, `settings_screen.dart`, `delete_account_screen.dart`,
-/// `app_gate.dart` 를 한 줄도 안 고쳐도 됩니다. 이전 버전 문서에 "본문만 갈아
-/// 끼우면 된다"고 적어둔 그대로입니다.
+/// `app_gate.dart` 를 한 줄도 안 고쳐도 됩니다.
 ///
 /// ## 안에서 달라진 것 넷
 ///
@@ -81,6 +80,7 @@ class AuthService extends ChangeNotifier {
   /// 스플래시에서 한 번. `SupabaseEnv.init()` 이 먼저 끝나 있어야 합니다.
   Future<void> restore() async {
     if (!SupabaseEnv.isConfigured) {
+      // 접속값이 없으면 로그인 자체가 불가능합니다. 계정이 서버로 갔으니까요.
       _stage = AuthStage.signedOut;
       notifyListeners();
       return;
@@ -117,7 +117,6 @@ class AuthService extends ChangeNotifier {
 
   // ── 회원가입 / 로그인 ────────────────────────────
 
-  /// 새 계정.
   Future<AuthResult> signUp({
     required String email,
     required String password,
@@ -183,7 +182,7 @@ class AuthService extends ChangeNotifier {
       await _adopt(user);
 
       if (switched) {
-        await TicketStore.instance.wipe(); // 안에서 SyncService.reset() 먼저 부릅니다
+        await TicketStore.instance.wipe(); // 안에서 SyncService.reset() 먼저
         await TicketStore.instance.load();
       }
       unawaited(SyncService.instance.syncNow(full: true));
@@ -202,10 +201,11 @@ class AuthService extends ChangeNotifier {
   /// 로그아웃하고 앱을 지운 사용자의 마지막 기록이 통째로 사라집니다.
   Future<void> signOut() async {
     if (SupabaseEnv.isConfigured) {
-      await SyncService.instance.pushPending().timeout(
-        const Duration(seconds: 8),
-        onTimeout: () {},
-      );
+      try {
+        await SyncService.instance
+            .pushPending()
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {}
       try {
         await sb.auth.signOut();
       } catch (_) {
@@ -360,7 +360,7 @@ class AuthService extends ChangeNotifier {
 
   Future<void> _cache(Viewer v) => _local.write(LocalStore.kAccount, v.toJson());
 
-  /// 비밀번호를 다시 받아 확인합니다. 성공해도 같은 계정이라 세션은 그대로입니다.
+  /// 비밀번호를 다시 받아 확인합니다. 같은 계정이라 세션은 그대로입니다.
   Future<bool> _reauthenticate(String email, String password) async {
     if (password.isEmpty) return false;
     try {
@@ -375,16 +375,20 @@ class AuthService extends ChangeNotifier {
   static bool _looksLikeEmail(String s) =>
       RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s);
 
+  /// 서버 오류를 화면 문구로.
+  ///
+  /// `AuthException` 의 필드 이름은 gotrue 버전마다 조금씩 달라서
+  /// (`code` 가 없던 시절이 있습니다) **[AuthException.message] 만** 봅니다.
+  /// 문자열 매칭이 촌스럽지만, 여기가 컴파일 에러의 단골 자리입니다.
   static AuthFailure _mapAuthError(AuthException e) {
-    final code = (e.code ?? '').toLowerCase();
     final msg = e.message.toLowerCase();
-    if (code.contains('already') || msg.contains('already registered')) {
+    if (msg.contains('already registered') || msg.contains('already exists')) {
       return AuthFailure.alreadyExists;
     }
-    if (code.contains('weak') || msg.contains('password should be')) {
+    if (msg.contains('password should be') || msg.contains('weak password')) {
       return AuthFailure.weakPassword;
     }
-    if (e.statusCode == '429' || msg.contains('rate limit')) {
+    if (msg.contains('rate limit') || msg.contains('too many')) {
       return AuthFailure.tooManyAttempts;
     }
     return AuthFailure.wrongCredentials;
@@ -394,7 +398,10 @@ class AuthService extends ChangeNotifier {
     if (e is SocketException || e is TimeoutException) {
       return AuthFailure.offline;
     }
-    if (e.toString().contains('SocketException')) return AuthFailure.offline;
+    final s = e.toString();
+    if (s.contains('SocketException') || s.contains('Failed host lookup')) {
+      return AuthFailure.offline;
+    }
     return fallback ?? AuthFailure.serverError;
   }
 
@@ -439,7 +446,7 @@ class Viewer {
 
   /// `M-2025-0006`. 서버 번호가 아직 없으면 자리표시를 냅니다.
   String get memberSerialText =>
-      memberNo > 0 ? memberSerial(since: memberYear, no: memberNo) : 'M-—-————';
+      memberNo > 0 ? memberSerial(since: memberYear, no: memberNo) : 'M-0000-0000';
 
   Viewer copyWith({
     String? name,
@@ -484,9 +491,7 @@ class Viewer {
     return Viewer(
       id: u.id,
       email: u.email ?? '',
-      name: (meta != null && meta.isNotEmpty)
-          ? meta
-          : (fallbackName ?? '이름 없음'),
+      name: (meta != null && meta.isNotEmpty) ? meta : (fallbackName ?? '이름 없음'),
       joinedAt: DateTime.tryParse(u.createdAt) ?? DateTime.now(),
     );
   }
