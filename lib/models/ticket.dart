@@ -113,6 +113,8 @@ class Ticket {
     this.companion = '',
     this.holographic = false,
     this.posterPath,
+    this.posterKey,
+    this.isPublic = false,
     this.px,
     this.py,
     this.pscale = 1.0,
@@ -134,8 +136,9 @@ class Ticket {
   // 전체를 **다시 매겼습니다.** 티켓을 하나 버리면 뒤 번호가 당겨져서,
   // 이미 공유해 둔 카드의 번호가 다른 티켓을 가리키게 됐습니다.
   //
-  // 이제 발권은 한 번뿐입니다. 이 두 값은 [TicketStore.add]가 딱 한 번 찍고
-  // 그 뒤로는 아무도 건드리지 않습니다. 관람일을 고쳐도 번호는 그대로입니다.
+  // 이제 발권은 한 번뿐입니다. 서버가 붙은 뒤로는 **번호를 서버가 뽑습니다**
+  // (`issue_ticket_serial` RPC). 오프라인에서 만든 티켓은 0으로 남았다가
+  // 첫 동기화에서 번호를 받습니다. 자세한 이유는 data/serial.dart 문서에.
 
   /// 번호를 찍은 해. 0이면 아직 발권 전(초안)입니다.
   int issuedYear;
@@ -162,8 +165,24 @@ class Ticket {
   String companion;
   bool holographic;
 
-  /// 사용자가 고른 사진의 로컬 경로. null이면 [posterTint]로 칠합니다.
+  /// 사용자가 고른 사진의 **이 기기 안의** 경로. null이면 [posterTint]로 칠합니다.
+  ///
+  /// `image_picker` 가 준 경로를 그대로 넣지 마세요. 그건 캐시 디렉터리라
+  /// 예고 없이 비워집니다. `PosterStorage.adopt()` 를 거친 값을 넣습니다.
   String? posterPath;
+
+  /// 서버 스토리지의 객체 경로(`{uid}/{ticketId}.jpg`).
+  ///
+  /// [posterPath] 와 **다릅니다.** 저건 이 기기 안의 경로이고 다른 기기에서는
+  /// 아무 의미가 없습니다. 그래서 둘 다 필요합니다. 사진을 바꾸면 이 값을
+  /// null 로 비워야 서버에 새로 올라갑니다.
+  String? posterKey;
+
+  /// 전시 페이지에 이 티켓을 걸지.
+  ///
+  /// **기본값은 false 여야 합니다.** 이 앱은 "혼자 소장하는 서랍"으로 팔리고
+  /// 있고, 기본 공개는 그 약속을 깹니다.
+  bool isPublic;
 
   /// 사진이 없을 때 쓰는 그라디언트.
   List<Color> posterTint;
@@ -205,6 +224,10 @@ class Ticket {
 
   /// 로컬 DB나 서버로 옮길 때 쓸 직렬화.
   /// enum은 인덱스가 아니라 **이름**으로 저장합니다(항목 순서가 바뀌어도 안전).
+  ///
+  /// ⚠ **키 순서를 바꾸지 마세요.** `SyncService` 가 이 결과의 해시로
+  /// "바뀐 티켓"을 골라냅니다. 순서만 바꿔도 전 레코드가 한 번 다시 올라갑니다
+  /// (틀린 결과는 아니고 트래픽만 한 번 더 씁니다).
   Map<String, dynamic> toJson() => {
     'id': id,
     'folderId': folderId,
@@ -223,6 +246,8 @@ class Ticket {
     'companion': companion,
     'holographic': holographic,
     'posterPath': posterPath,
+    'posterKey': posterKey,
+    'isPublic': isPublic,
     'posterTint': posterTint.map((c) => c.toARGB32()).toList(),
     'px': px,
     'py': py,
@@ -252,13 +277,14 @@ class Ticket {
     companion: j['companion'] as String? ?? '',
     holographic: j['holographic'] as bool? ?? false,
     posterPath: j['posterPath'] as String?,
+    posterKey: j['posterKey'] as String?,
+    isPublic: j['isPublic'] as bool? ?? false,
     px: (j['px'] as num?)?.toDouble(),
     py: (j['py'] as num?)?.toDouble(),
     pscale: (j['pscale'] as num?)?.toDouble() ?? 1.0,
     protation: (j['protation'] as num?)?.toDouble() ?? 0.0,
-    posterTint: (j['posterTint'] as List?)
-        ?.map((v) => Color(v as int))
-        .toList(),
+    posterTint:
+    (j['posterTint'] as List?)?.map((v) => Color(v as int)).toList(),
     layers: j['layers'] == null
         ? null
         : ScrapLayer.decodeList(j['layers'] as String),
