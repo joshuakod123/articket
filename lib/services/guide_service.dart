@@ -35,6 +35,12 @@ class GuideService extends ChangeNotifier {
   /// 서랍 화면의 코치 마크를 봤다.
   static const _kDrawer = 'drawer';
 
+  /// 티켓 한 장 만드는 순서 안내를 봤다. (첫 발권 직전에 한 번)
+  static const _kWorkshop = 'workshop';
+
+  /// 에디터 안에서 뜨는 코치 마크를 봤다. (에디터 첫 진입에 한 번)
+  static const _kEditor = 'editor';
+
   final Map<String, bool> _flags = {};
 
   bool _loaded = false;
@@ -60,12 +66,20 @@ class GuideService extends ChangeNotifier {
 
   bool get sawDrawerCoach => _flags[_kDrawer] ?? false;
 
+  bool get sawWorkshop => _flags[_kWorkshop] ?? false;
+
+  bool get sawEditorCoach => _flags[_kEditor] ?? false;
+
   /// 아직 아무 안내도 못 본 상태. 빈 서랍 문구를 고를 때 씁니다.
   bool get isFirstRun => !sawTour;
 
   Future<void> markTourSeen() => _set(_kTour, true);
 
   Future<void> markDrawerCoachSeen() => _set(_kDrawer, true);
+
+  Future<void> markWorkshopSeen() => _set(_kWorkshop, true);
+
+  Future<void> markEditorCoachSeen() => _set(_kEditor, true);
 
   /// 처음부터 다시. 가입 직후·"다시 보기"에서 부릅니다.
   Future<void> reset() async {

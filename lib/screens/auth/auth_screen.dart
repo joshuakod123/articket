@@ -485,8 +485,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
         width: double.infinity,
         child: Text(
           _isSignUp
-              ? '이메일과 비밀번호만 있으면 됩니다.'
-              : '이 기기에 저장된 계정으로 들어갑니다.',
+              ? '이메일이랑 비밀번호만 있으면 돼요.'
+              : '이 기기에 저장된 계정으로 들어가요.',
           style: AppText.ui(size: 12.5, height: 1.5, color: AppColors.inkSoft),
         ),
       ),
@@ -606,7 +606,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
       alignment: Alignment.topCenter,
       child: _isSignUp
           ? Text(
-        '가입하면 이용약관과 개인정보 처리방침에 동의한 것으로 봅니다.\n'
+        '가입하면 이용약관과 개인정보 처리방침에 동의하는 걸로 볼게요.\n'
             '계정은 설정에서 언제든 지울 수 있어요.',
         textAlign: TextAlign.center,
         style: AppText.ui(size: 11, height: 1.7, color: AppColors.pulp),

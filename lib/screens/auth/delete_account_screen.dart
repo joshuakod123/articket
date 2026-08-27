@@ -94,7 +94,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                         style: AppText.eyebrow(
                             color: AppColors.oxblood, size: 9)),
                     const SizedBox(height: 12),
-                    Text('아래가 전부 사라집니다',
+                    Text('아래가 전부 사라져요',
                         style:
                         AppText.display(size: 20, color: AppColors.ink)),
                     const SizedBox(height: 16),
@@ -107,8 +107,8 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                     Container(height: 1, color: AppColors.line),
                     const SizedBox(height: 12),
                     Text(
-                      '발권 번호도 함께 회수됩니다. 같은 이메일로 다시 가입해도 '
-                          '이전 기록은 복구되지 않습니다.',
+                      '발권 번호도 같이 회수돼요. 같은 이메일로 다시 가입해도 '
+                          '이전 기록은 돌아오지 않아요.',
                       style: AppText.ui(
                           size: 12, height: 1.65, color: AppColors.inkSoft),
                     ),

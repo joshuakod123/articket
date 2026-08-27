@@ -9,6 +9,7 @@ import '../widgets/loading.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
 import 'auth/delete_account_screen.dart';
+import 'onboarding/ticket_guide.dart';
 
 /// 설정.
 ///
@@ -66,9 +67,18 @@ class SettingsScreen extends StatelessWidget {
                   _Section(
                     label: 'ABOUT',
                     children: [
+                      // 티켓 만드는 법은 앱을 쓰는 내내 다시 보고 싶어지는
+                      // 안내입니다. 첫 발권 때 한 번 보여주고 마는 대신
+                      // 여기 상시로 걸어둡니다.
                       _Row(
-                        title: '앱 안내 다시 보기',
-                        note: '서랍으로 돌아가면 처음 안내가 다시 뜹니다',
+                        title: '티켓 만드는 법',
+                        note: '세 단계로 짧게',
+                        chevron: true,
+                        onTap: () => showTicketWorkshopGuide(context),
+                      ),
+                      _Row(
+                        title: '처음 안내 다시 보기',
+                        note: '서랍 탭으로 가면 처음부터 다시 떠요',
                         chevron: true,
                         onTap: () => _replayGuide(context),
                       ),
@@ -76,12 +86,12 @@ class SettingsScreen extends StatelessWidget {
                       _Row(
                         title: '이용약관',
                         chevron: true,
-                        onTap: () => PaperToast.show(context, '준비 중입니다'),
+                        onTap: () => PaperToast.show(context, '아직 준비 중이에요'),
                       ),
                       _Row(
                         title: '개인정보 처리방침',
                         chevron: true,
-                        onTap: () => PaperToast.show(context, '준비 중입니다'),
+                        onTap: () => PaperToast.show(context, '아직 준비 중이에요'),
                       ),
                     ],
                   ),
@@ -94,12 +104,12 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       _Row(
                         title: '로그아웃',
-                        note: '기록은 기기에 남습니다',
+                        note: '기록은 기기에 남아요',
                         onTap: () => _signOut(context),
                       ),
                       _Row(
                         title: '계정 삭제',
-                        note: '되돌릴 수 없습니다',
+                        note: '되돌릴 수 없어요',
                         danger: true,
                         chevron: true,
                         onTap: () => Navigator.of(context).push(
@@ -136,8 +146,8 @@ class SettingsScreen extends StatelessWidget {
   Future<void> _replayGuide(BuildContext context) async {
     await GuideService.instance.reset();
     if (!context.mounted) return;
-    PaperToast.done(context, '안내를 처음으로 되돌렸습니다',
-        detail: '서랍 탭으로 돌아가면 다시 보여드립니다');
+    PaperToast.done(context, '처음으로 되돌렸어요',
+        detail: '서랍 탭으로 가시면 다시 떠요');
   }
 
   Future<void> _rename(BuildContext context, String current) async {
@@ -165,7 +175,7 @@ class SettingsScreen extends StatelessWidget {
 
     if (next == null || next.trim().isEmpty) return;
     await AuthService.instance.rename(next);
-    if (context.mounted) PaperToast.done(context, '이름을 고쳤습니다');
+    if (context.mounted) PaperToast.done(context, '이름 바꿨어요');
   }
 
   Future<void> _changePassword(BuildContext context) async {
@@ -198,7 +208,7 @@ class SettingsScreen extends StatelessWidget {
 
     if (!context.mounted) return;
     result.isOk
-        ? PaperToast.done(context, '비밀번호를 바꿨습니다')
+        ? PaperToast.done(context, '비밀번호 바꿨어요')
         : PaperToast.warn(context, result.message);
   }
 
@@ -209,7 +219,7 @@ class SettingsScreen extends StatelessWidget {
         title: '로그아웃할까요',
         confirmLabel: '로그아웃',
         child: Text(
-          '기록은 이 기기에 그대로 남습니다. 다시 로그인하면 서랍이 그대로 열립니다.',
+          '기록은 이 기기에 남아 있어요. 다시 들어오면 서랍도 그대로예요.',
           style: AppText.ui(size: 13, height: 1.6, color: AppColors.inkSoft),
         ),
         onConfirm: () => Navigator.of(context).pop(true),

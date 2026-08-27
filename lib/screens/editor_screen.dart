@@ -5,16 +5,19 @@ import 'package:uuid/uuid.dart';
 import '../data/ticket_store.dart';
 import '../models/layer.dart';
 import '../models/ticket.dart';
+import '../services/guide_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../theme/feel.dart';
 import '../theme/folder_style.dart';
+import '../widgets/coach_marks.dart';
 import '../widgets/paper.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scrap_layers.dart';
 import '../widgets/snap.dart';
 import '../widgets/stamp.dart';
 import '../widgets/ticket_card.dart';
+import 'onboarding/ticket_guide.dart';
 import 'record_sheet.dart';
 import 'scrap_sheets.dart';
 import 'ticket_style_sheet.dart';
@@ -62,7 +65,59 @@ class _EditorScreenState extends State<EditorScreen> {
   final List<String> _redo = [];
   static const _maxHistory = 40;
 
+  // ── 첫 진입 안내 ──────────────────────────────────
+  //
+  // 이 앱을 여는 이유가 이 화면인데, 그동안 여기만 안내가 없었습니다.
+  // 서랍은 코치 마크로 알려주면서 정작 티켓을 꾸미는 자리에서는
+  // 사용자가 빈 티켓 한 장을 보고 있어야 했습니다.
+  //
+  // 도려낼 자리는 툴바 버튼들입니다. 툴바는 가로로 스크롤되므로
+  // 개별 버튼이 아니라 **묶음**에 키를 답니다. 좁은 기기에서 '기록'이
+  // 화면 밖으로 밀려도 구멍이 엉뚱한 데 뚫리지 않습니다.
+
+  final _canvasKey = GlobalKey();
+  final _faceKey = GlobalKey();
+  final _decorateKey = GlobalKey();
+  final _recordKey = GlobalKey();
+
+  /// 안내가 두 번 겹쳐 뜨지 않게 하는 빗장.
+  bool _guiding = false;
+
   Ticket get _ticket => store.byId(widget.ticketId)!;
+
+  @override
+  void initState() {
+    super.initState();
+    // 첫 프레임 뒤여야 툴바 좌표를 읽을 수 있습니다.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runCoachIfNeeded());
+  }
+
+  Future<void> _runCoachIfNeeded() async {
+    if (!mounted || _guiding) return;
+    _guiding = true;
+    try {
+      final guide = GuideService.instance;
+      await guide.load();
+      if (!mounted || guide.sawEditorCoach) return;
+
+      // 상세 화면에서 넘어오는 전환이 끝나야 툴바가 제자리입니다.
+      await Future<void>.delayed(const Duration(milliseconds: 340));
+      if (!mounted) return;
+
+      await showCoachMarks(
+        context,
+        steps: ticketEditorCoachSteps(
+          canvasKey: _canvasKey,
+          faceKey: _faceKey,
+          decorateKey: _decorateKey,
+          recordKey: _recordKey,
+        ),
+      );
+      await guide.markEditorCoachSeen();
+    } finally {
+      _guiding = false;
+    }
+  }
 
   // ── 되돌리기 ─────────────────────────────────────
 
@@ -190,6 +245,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 40, vertical: 28),
                           child: AspectRatio(
+                            key: _canvasKey,
                             aspectRatio: ticket.frame.aspect,
                             // 레이어의 기준 사각형을 **티켓 자신**으로 잡습니다.
                             // 화면을 기준으로 잡으면 티켓을 뒤집거나 프레임을
@@ -305,6 +361,24 @@ class _EditorScreenState extends State<EditorScreen> {
                           ),
                         ),
                       ),
+
+                      // 아직 아무것도 안 붙인 티켓에는 다음 할 일을 한 줄만
+                      // 흘려둡니다. 코치 마크를 건너뛴 사람에게 남는 유일한
+                      // 안내라, 한 번 붙이는 순간 조용히 사라집니다.
+                      if (ticket.layers.isEmpty)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 8,
+                          child: IgnorePointer(
+                            child: Text(
+                              '아래에서 하나 골라 붙여보세요',
+                              textAlign: TextAlign.center,
+                              style: AppText.ui(
+                                  size: 11.5, color: AppColors.pulp),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -323,6 +397,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 ),
 
               _Toolbar(
+                faceKey: _faceKey,
+                decorateKey: _decorateKey,
+                recordKey: _recordKey,
                 onFrame: () => _openStyle(0),
                 onPoster: () => _openStyle(1),
                 onSticker: _addSticker,
@@ -883,8 +960,17 @@ class _Handle extends StatelessWidget {
   }
 }
 
+/// 에디터 아래 도구 줄.
+///
+/// 버튼 여덟 개가 나란히 있지만 하는 일은 세 갈래입니다 —
+/// **얼굴 고르기**(프레임·포스터) / **붙이기**(스티커·도장·글자·테이프·폴라로이드) /
+/// **적기**(기록). 코치 마크가 이 세 갈래를 각각 도려낼 수 있게
+/// 묶음마다 키를 답니다. 버튼 하나씩 가리키면 안내가 여덟 장이 됩니다.
 class _Toolbar extends StatelessWidget {
   const _Toolbar({
+    this.faceKey,
+    this.decorateKey,
+    this.recordKey,
     required this.onFrame,
     required this.onPoster,
     required this.onSticker,
@@ -894,6 +980,11 @@ class _Toolbar extends StatelessWidget {
     required this.onPhoto,
     required this.onInfo,
   });
+
+  /// 안내에서 도려낼 세 묶음.
+  final GlobalKey? faceKey;
+  final GlobalKey? decorateKey;
+  final GlobalKey? recordKey;
 
   final VoidCallback onFrame;
   final VoidCallback onPoster;
@@ -921,14 +1012,32 @@ class _Toolbar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 children: [
-                  _tool(Icons.crop_free, '프레임', onFrame),
-                  _tool(Icons.wallpaper_outlined, '포스터', onPoster),
-                  _tool(Icons.auto_awesome_outlined, '스티커', onSticker),
-                  _tool(Icons.approval_outlined, '도장', onStamp),
-                  _tool(Icons.text_fields, '글자', onText),
-                  _tool(Icons.horizontal_rule, '테이프', onTape),
-                  _tool(Icons.photo_outlined, '폴라로이드', onPhoto),
-                  _tool(Icons.edit_note, '기록', onInfo),
+                  Row(
+                    key: faceKey,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _tool(Icons.crop_free, '프레임', onFrame),
+                      _tool(Icons.wallpaper_outlined, '포스터', onPoster),
+                    ],
+                  ),
+                  Row(
+                    key: decorateKey,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _tool(Icons.auto_awesome_outlined, '스티커', onSticker),
+                      _tool(Icons.approval_outlined, '도장', onStamp),
+                      _tool(Icons.text_fields, '글자', onText),
+                      _tool(Icons.horizontal_rule, '테이프', onTape),
+                      _tool(Icons.photo_outlined, '폴라로이드', onPhoto),
+                    ],
+                  ),
+                  Row(
+                    key: recordKey,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _tool(Icons.edit_note, '기록', onInfo),
+                    ],
+                  ),
                 ],
               ),
             ),

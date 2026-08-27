@@ -162,8 +162,8 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     setState(() {});
 
     if (!silent && mounted) {
-      PaperToast.show(context, '자유 배치로 바꿨습니다',
-          detail: '티켓을 끌어 옮기고, 두 손가락으로 돌리세요');
+      PaperToast.show(context, '이제 마음대로 놓을 수 있어요',
+          detail: '끌어서 옮기고, 두 손가락으로 돌려요');
     }
   }
 
@@ -181,7 +181,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     folder.freeLayout = false;
     store.touch();
     setState(() => _selected = null);
-    PaperToast.show(context, '자동 배치로 되돌렸습니다');
+    PaperToast.show(context, '원래 자리로 돌려놨어요');
   }
 
   // ── 붙이기 ──────────────────────────────────────
@@ -274,8 +274,8 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     ));
 
     if (path == null || path.isEmpty) {
-      PaperToast.show(context, '빈 폴라로이드를 붙였습니다',
-          detail: '두 번 누르면 사진을 넣을 수 있습니다');
+      PaperToast.show(context, '폴라로이드 붙였어요',
+          detail: '두 번 누르면 사진이 들어가요');
     }
   }
 
@@ -291,7 +291,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
       );
       return shot?.path;
     } catch (e) {
-      if (mounted) PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
+      if (mounted) PaperToast.warn(context, '사진을 못 불러왔어요', detail: '$e');
       return null;
     }
   }
@@ -337,7 +337,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     store.touch();
     Feel.tear();
     setState(() => _selected = null);
-    PaperToast.show(context, '한 겹 떼어냈습니다', detail: '↩︎ 로 되돌릴 수 있습니다');
+    PaperToast.show(context, '한 겹 뗐어요', detail: '↩︎ 누르면 돌아와요');
   }
 
   Future<void> _edit(ScrapLayer layer) async {
@@ -413,7 +413,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
       builder: (context, _) {
         final folder = _folder;
         if (folder == null) {
-          return const Scaffold(body: Center(child: Text('삭제된 서류철입니다')));
+          return const Scaffold(body: Center(child: Text('없는 서류철이에요')));
         }
 
         final tickets = _tickets;
@@ -768,10 +768,10 @@ class _LayoutBanner extends StatelessWidget {
             Expanded(
               child: Text(
                 free
-                    ? '티켓을 눌러 고르면 ↺ ↻ 로 돌릴 수 있습니다'
+                    ? '티켓을 누르면 ↺ ↻ 로 돌아가요'
                     : (hasTickets
-                    ? '티켓은 자동으로 놓여 있습니다'
-                    : '티켓을 만들면 이 페이지에 붙습니다'),
+                    ? '티켓은 알아서 놓여 있어요'
+                    : '티켓을 만들면 여기 붙어요'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.ui(size: 12, color: AppColors.inkSoft),
@@ -805,12 +805,12 @@ class _EmptyHint extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('빈 페이지입니다',
+            Text('아직 빈 페이지예요',
                 style: AppText.hand(size: 24, color: AppColors.pulp)),
             const SizedBox(height: 6),
             const DoodleUnderline(width: 120),
             const SizedBox(height: 10),
-            Text('아래에서 스티커·글자·테이프를 골라 붙이세요',
+            Text('아래에서 하나 골라 붙여보세요',
                 style: AppText.ui(size: 12, color: AppColors.pulp)),
           ],
         ),
@@ -1120,7 +1120,7 @@ class _TicketBar extends StatelessWidget {
         // 초기화는 되돌릴 게 있을 때만 나옵니다. 회전 버튼 옆에 늘 떠 있으면
         // 셋 중 무엇이 회전인지 또 헷갈립니다.
         if (tilted)
-          _BarAction(Icons.settings_backup_restore, '똑바로 (크기·각도 초기화)',
+          _BarAction(Icons.settings_backup_restore, '똑바로 되돌리기',
               onReset),
         _BarAction(Icons.check, '완료', onDone),
       ],

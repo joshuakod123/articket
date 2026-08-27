@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/ticket_store.dart';
 import '../models/ticket.dart';
+import '../services/guide_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/paper.dart';
@@ -13,6 +14,7 @@ import '../widgets/scrap_page.dart';
 import '../widgets/scrapbook.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/ticket_canvas.dart';
+import 'onboarding/ticket_guide.dart';
 import 'page_decor_screen.dart';
 import 'share_card_screen.dart';
 import 'ticket_detail_screen.dart';
@@ -302,7 +304,7 @@ class _FolderScreenState extends State<FolderScreen> {
         Text(widget.folder.subtitle,
             style: AppText.display(size: 30, color: AppColors.ink)),
         const SizedBox(height: 6),
-        Text('$count장 · 목록 보기에서 하나씩 정리할 수 있습니다',
+        Text('$count장 · 목록 보기에서 하나씩 정리해요',
             style: AppText.data(size: 10, color: AppColors.inkSoft)),
       ],
     ),
@@ -351,7 +353,22 @@ class _FolderScreenState extends State<FolderScreen> {
     );
   }
 
-  void _create() {
+  /// 티켓 한 장 발권.
+  ///
+  /// **처음 만드는 사람에게는 순서를 먼저 보여줍니다.** 그냥 뽑아 주면
+  /// 빈 티켓 한 장과 낯선 툴바 앞에 놓이게 됩니다. 안내는 딱 한 번 뜨고,
+  /// 그 뒤로는 이 함수가 곧장 발권합니다.
+  Future<void> _create() async {
+    final guide = GuideService.instance;
+    await guide.load();
+    if (!mounted) return;
+
+    if (!guide.sawWorkshop) {
+      await showTicketWorkshopGuide(context);
+      await guide.markWorkshopSeen();
+      if (!mounted) return;
+    }
+
     final id = const Uuid().v4();
     // 발권 번호는 여기서 만들지 않습니다.
     // store.add() 가 이 순간 딱 한 번 도장을 찍고, 그 뒤로는 바뀌지 않습니다.
@@ -382,7 +399,7 @@ class _FolderScreenState extends State<FolderScreen> {
             style: AppText.ui(size: 16, color: AppColors.ink)),
         content: Text(
           '「${ticket.title.replaceAll('\n', ' ')}」\n'
-              '붙여둔 것들도 함께 사라지고, 되돌릴 수 없습니다.',
+              '붙여둔 것도 같이 사라져요. 되돌릴 수 없어요.',
           style: AppText.ui(size: 13, height: 1.6, color: AppColors.inkSoft),
         ),
         actions: [
@@ -676,7 +693,7 @@ class _Empty extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('아직 철해둔 티켓이 없습니다',
+          Text('아직 비어 있어요',
               style: AppText.ui(size: 14, color: AppColors.inkSoft)),
           const SizedBox(height: 14),
           OutlinedButton(

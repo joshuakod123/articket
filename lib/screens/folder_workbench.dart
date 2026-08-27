@@ -130,7 +130,7 @@ class _FolderWorkbenchState extends State<FolderWorkbench> {
     if (name.isEmpty) {
       HapticFeedback.heavyImpact();
       PaperToast.warn(context, '서류철 이름을 적어주세요',
-          detail: '탭 라벨은 비워도 자동으로 채웁니다');
+          detail: '탭 라벨은 비워도 알아서 채워요');
       return;
     }
 
@@ -180,8 +180,8 @@ class _FolderWorkbenchState extends State<FolderWorkbench> {
             style: AppText.ui(size: 16, color: AppColors.ink)),
         content: Text(
           n == 0
-              ? '「${_draft.subtitle}」 서류철을 버립니다.'
-              : '「${_draft.subtitle}」 안의 티켓 $n장도 함께 버려집니다.\n복구할 수 없습니다.',
+              ? '「${_draft.subtitle}」 서류철을 버려요.'
+              : '「${_draft.subtitle}」 안의 티켓 $n장도 같이 버려요.\n되돌릴 수 없어요.',
           style: AppText.ui(size: 13, color: AppColors.inkSoft),
         ),
         actions: [
@@ -356,7 +356,7 @@ class _TopBar extends StatelessWidget {
                     style: AppText.eyebrow(color: AppColors.foil)),
                 const SizedBox(height: 4),
                 Text(
-                  isNew ? '서류철을 한 장 새로 맵니다' : '아래로 끌어내리면 파쇄합니다',
+                  isNew ? '서류철 한 장 새로 매요' : '아래로 끌어내리면 파쇄돼요',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppText.ui(size: 12, color: AppColors.inkSoft),
@@ -439,7 +439,7 @@ class _ShredZone extends StatelessWidget {
               size: 22, color: c),
           const SizedBox(height: 6),
           Text(
-            armed ? '손을 놓으면 파쇄합니다' : '여기까지 끌어내리세요',
+            armed ? '손 놓으면 파쇄돼요' : '여기까지 끌어내리세요',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppText.data(size: 10, spacing: 1.4, color: c),
@@ -500,7 +500,7 @@ class _ToolDrawer extends StatelessWidget {
                   const _RailTitle('탭 라벨', 'TAB'),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 2, 20, 10),
-                    child: _field(label, '비우면 자동으로 채웁니다'),
+                    child: _field(label, '비우면 알아서 채워요'),
                   ),
 
                   // ── 서체 ─────────────────────────

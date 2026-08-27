@@ -254,7 +254,7 @@ class _RecordSheetState extends State<RecordSheet> {
                     const SizedBox(height: 26),
 
                     // ── 별점 ──────────────────────────
-                    Text('이 전시에 몇 점을 줄까요',
+                    Text('몇 점 줄까요',
                         style:
                         AppText.ui(size: 12, color: AppColors.inkSoft)),
                     const SizedBox(height: 10),
@@ -316,7 +316,7 @@ class _RecordSheetState extends State<RecordSheet> {
                         decoration: InputDecoration(
                           isDense: true,
                           border: InputBorder.none,
-                          hintText: '기억나는 대로, 아무렇게나 적어도 됩니다',
+                          hintText: '기억나는 대로 아무렇게나',
                           hintStyle: AppText.ui(
                               size: 13.5, height: 1.85, color: AppColors.pulp),
                           contentPadding: EdgeInsets.zero,
@@ -331,7 +331,7 @@ class _RecordSheetState extends State<RecordSheet> {
                     const SizedBox(height: 10),
                     Center(
                       child: Text(
-                        '적어둔 내용은 티켓 뒷면에 인쇄됩니다',
+                        '여기 적은 건 티켓 뒷면에 인쇄돼요',
                         style: AppText.data(
                             size: 9, spacing: 0.8, color: AppColors.pulp),
                       ),
@@ -602,7 +602,7 @@ class _StampButton extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      '기록 저장',
+                      '기록 넣기',
                       style: AppText.ui(
                         size: 15,
                         weight: FontWeight.w600,

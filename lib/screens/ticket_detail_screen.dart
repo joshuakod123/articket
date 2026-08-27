@@ -94,7 +94,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
       builder: (context, _) {
         final ticket = store.byId(widget.ticketId);
         if (ticket == null) {
-          return const Scaffold(body: Center(child: Text('삭제된 티켓입니다')));
+          return const Scaffold(body: Center(child: Text('없는 티켓이에요')));
         }
 
         return Scaffold(
@@ -169,7 +169,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
                 right: 0,
                 bottom: 0,
                 child: _ActionBar(
-                  hint: _showingBack ? '탭하면 앞면' : '탭하면 감상 기록',
+                  hint: _showingBack ? '누르면 앞면' : '누르면 뒷면',
                   onDecorate: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => EditorScreen(ticketId: ticket.id),
@@ -216,7 +216,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
         // 사용자가 알아볼 수 있는 이름으로 묻습니다.
         content: Text(
           '「${ticket.title.replaceAll('\n', ' ')}」\n'
-              '붙여둔 것들도 함께 사라지고, 되돌릴 수 없습니다.',
+              '붙여둔 것도 같이 사라져요. 되돌릴 수 없어요.',
           style: AppText.ui(size: 13, height: 1.6, color: AppColors.inkSoft),
         ),
         actions: [

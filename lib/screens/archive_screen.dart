@@ -240,12 +240,10 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
       CoachStep(
         target: _newFileKey,
         eyebrow: 'STEP 01',
-        title: '여기서 서류철을 만듭니다',
+        title: '서류철은 여기서',
         body: folders.isEmpty
-            ? '티켓은 서류철 안에 철합니다. 먼저 한 장 만드세요.\n'
-            '"2026년", "미디어아트"처럼 마음대로 나누면 됩니다.'
-            : '연도별로, 장르별로, 마음대로 나누세요.\n'
-            '이름·색·서체·질감을 그 자리에서 고를 수 있습니다.',
+            ? '티켓은 서류철 안에 들어가요. 하나 먼저 만들어 주세요.'
+            : '이름도 색도 나중에 얼마든지 바꿔요.',
         pad: const EdgeInsets.all(9),
         side: CoachSide.below,
       ),
@@ -253,17 +251,15 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
         CoachStep(
           target: _keyOf(folders.first.id),
           eyebrow: 'STEP 02',
-          title: '눌러서 펼치고,\n길게 눌러 고치기',
-          body: '표지를 누르면 스크랩북이 열립니다.\n'
-              '길게 누르면 서류철이 책상 위로 뽑혀 나와, 이름과 색을 바로 고칠 수 있습니다.',
+          title: '누르면 펼쳐져요',
+          body: '길게 누르면 책상 위로 뽑혀 나와요. 거기서 이름이랑 색을 고쳐요.',
           pad: const EdgeInsets.fromLTRB(6, 6, 6, 0),
         ),
       CoachStep(
         target: widget.navBarKey,
         eyebrow: folders.isEmpty ? 'STEP 02' : 'STEP 03',
-        title: '달력과 내 기록',
-        body: '관람한 날은 달력에 도장처럼 남습니다.\n'
-            '내 기록에는 회원증과 통계가 쌓이고, 오른쪽 위에서 설정으로 갑니다.',
+        title: '달력이랑 내 기록',
+        body: '본 날은 달력에 도장처럼 남아요. 설정은 내 기록 오른쪽 위에 있어요.',
         pad: EdgeInsets.zero,
         radius: 0,
         side: CoachSide.above,

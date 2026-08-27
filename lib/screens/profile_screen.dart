@@ -244,7 +244,7 @@ class ProfileScreen extends StatelessWidget {
                           subtitle: '앱을 지우면 기록도 같이 사라져요',
                           onTap: () => PaperToast.show(
                             context,
-                            '클라우드 백업은 Phase 2에서 붙습니다',
+                            '클라우드 백업은 아직이에요',
                             detail: 'ROADMAP · PHASE 2',
                           ),
                         ),
@@ -254,7 +254,7 @@ class ProfileScreen extends StatelessWidget {
                           subtitle: '티켓 전체를 파일 한 장으로',
                           onTap: () => PaperToast.show(
                             context,
-                            '내보내기는 Phase 1 후반에 붙습니다',
+                            '내보내기도 곧 붙일게요',
                             detail: 'ROADMAP · PHASE 1',
                           ),
                         ),

@@ -125,7 +125,7 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
         targetWidth: _exportWidth,
       );
     } catch (e) {
-      if (mounted) PaperToast.warn(context, '공유하지 못했습니다', detail: '$e');
+      if (mounted) PaperToast.warn(context, '공유하지 못했어요', detail: '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
