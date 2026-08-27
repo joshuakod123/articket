@@ -5,7 +5,17 @@ import '../models/layer.dart';
 import '../theme/app_colors.dart';
 import '../theme/folder_style.dart';
 
-/// 화면을 채우기 위한 임시 데이터. Phase 1에서 로컬 DB로 교체합니다.
+/// 예시 데이터. **앱 실행 경로에서는 쓰지 않습니다.**
+///
+/// 예전에는 `TicketStore.load()` 가 첫 실행 때 이걸 부어 넣었습니다. 그래서
+/// 갓 가입한 사용자가 가본 적 없는 전시 여섯 개를 자기 서랍에서 발견했고,
+/// 심지어 그게 **서버에 자기 기록으로 업로드**됐습니다. 지금은
+/// `TicketStore.seedSampleData()` 로만 들어가고, 그 메서드는 테스트 전용입니다.
+///
+/// 지우지 않고 남겨 두는 이유는 위젯 테스트와 스크린샷 촬영에 필요하기
+/// 때문입니다. 여기 있는 id 는 [kSampleFolderIds] · [kSampleTicketIds] 와
+/// 반드시 같아야 합니다 — 구버전 기기에서 예시를 되찾아 지울 때 쓰는
+/// 명단입니다.
 final List<ArchiveFolder> mockFolders = [
   ArchiveFolder(
     id: 'f2026',
@@ -169,3 +179,26 @@ final List<Ticket> mockTickets = [
     posterTint: const [Color(0xFF2E3B4E), Color(0xFF121821)],
   ),
 ];
+
+/// 구버전이 기기에 깔아 둔 예시의 id 명단.
+///
+/// `TicketStore._purgeLegacySample()` 이 이 목록만 골라 지웁니다. 사용자가
+/// 직접 만든 기록을 실수로 지우지 않으려면 **id 로만** 판단해야 합니다.
+/// (이름이나 전시명으로 지우면 진짜로 모네 전시를 다녀온 사람의 기록이
+/// 사라집니다)
+const kSampleFolderIds = <String>{
+  'f2026',
+  'f2025',
+  'fmedia',
+  'fphoto',
+  'fdraft',
+};
+
+const kSampleTicketIds = <String>{
+  't001',
+  't002',
+  't003',
+  't004',
+  't005',
+  't006',
+};

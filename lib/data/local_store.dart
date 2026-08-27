@@ -38,15 +38,34 @@ class LocalStore {
   static const kSession = 'articket.session.v1';
   static const kPrefs = 'articket.prefs.v1';
 
-  static const allKeys = <String>[
+  /// 앱 안내를 봤는지. 기기의 사정이라 계정과 함께 지우지 않습니다.
+  static const kGuide = 'articket.guide.v1';
+
+  /// 구버전이 깔아 둔 **예시 데이터를 걷어냈는지**. 한 번만 돕니다.
+  /// (`TicketStore._purgeLegacySample` 참고)
+  static const kSamplePurged = 'articket.sample.purged.v1';
+
+  /// **기록**에 해당하는 키. 계정을 갈아탈 때 이만큼만 비웁니다.
+  ///
+  /// 계정 캐시([kAccount])와 세션([kSession])이 여기 없는 것이 핵심입니다.
+  /// 예전에는 [TicketStore.wipe] 가 [wipe] 를 불러 **방금 로그인한 계정
+  /// 정보까지** 지웠습니다. 그래서 계정을 갈아타면 회원 번호가 사라지고
+  /// 다음에 로그인 화면에서 이메일 자동 채우기도 먹통이 됐습니다.
+  static const dataKeys = <String>[
     kTickets,
     kFolders,
     kIssued,
     kSeeded,
     kViewerName,
+    kSamplePurged,
+  ];
+
+  static const allKeys = <String>[
+    ...dataKeys,
     kAccount,
     kSession,
     kPrefs,
+    kGuide,
   ];
 
   Future<Map<String, dynamic>?> readMap(String key) async {
@@ -92,6 +111,17 @@ class LocalStore {
   Future<void> wipe() async {
     final p = await _p;
     for (final k in allKeys) {
+      await p.remove(k);
+    }
+  }
+
+  /// **기록만** 지웁니다. 계정·세션·설정은 그대로 둡니다.
+  ///
+  /// 계정 전환·가입 직후에 씁니다. 그 순간 사용자는 로그인한 상태이고,
+  /// 지워야 하는 것은 앞사람의 티켓이지 방금 발급받은 세션이 아닙니다.
+  Future<void> wipeData() async {
+    final p = await _p;
+    for (final k in dataKeys) {
       await p.remove(k);
     }
   }

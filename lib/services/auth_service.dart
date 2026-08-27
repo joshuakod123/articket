@@ -9,6 +9,7 @@ import '../data/serial.dart';
 import '../data/supabase_env.dart';
 import '../data/sync_service.dart';
 import '../data/ticket_store.dart';
+import 'guide_service.dart';
 
 /// 로그인 상태.
 enum AuthStage {
@@ -147,9 +148,31 @@ class AuthService extends ChangeNotifier {
 
       await _adopt(res.user!, fallbackName: name.trim());
 
-      // 이 기기에 이미 쌓여 있던 로컬 기록을 **새 계정 것으로 입양**합니다.
-      // 로그인 전에 만든 티켓이 사라지면 사용자는 가입한 걸 후회합니다.
-      unawaited(SyncService.instance.adoptLocalDataThenSync());
+      // ── 새 계정은 **빈 서랍**에서 시작합니다 ──
+      //
+      // 예전에는 여기서 `adoptLocalDataThenSync()` 를 불러, 이 기기에 남아
+      // 있던 기록을 새 계정 것으로 입양했습니다. 로그인 없이 쓸 수 있는
+      // 앱이라면 맞는 처리입니다. **그런데 이 앱은 로그인해야 들어옵니다**
+      // (`AppGate` 가 `signedOut` 이면 `AuthScreen` 만 띄웁니다).
+      //
+      // 그러면 가입 시점에 기기에 남아 있는 기록은 둘 중 하나뿐입니다.
+      //
+      //   (a) 구버전이 깔아 둔 **예시 데이터** — 남의 전시
+      //   (b) 앞서 로그아웃한 **다른 사람의 기록** — 진짜 남의 기록
+      //
+      // 어느 쪽도 이 계정의 것이 아닙니다. (b)는 그냥 화면이 이상한 정도가
+      // 아니라, 남의 관람 기록·사진·한 줄 평이 새 계정의 서버 계정으로
+      // 통째로 업로드되는 **사고**입니다. 그래서 입양하지 않고 비웁니다.
+      //
+      // 로그아웃한 사람의 기록은 사라지지 않습니다. 그 사람이 다시
+      // 로그인하면 서버에서 그대로 내려옵니다(`signOut` 이 나가기 전에
+      // 밀어 올립니다).
+      await TicketStore.instance.wipe();
+
+      // 새 사람이니 안내도 처음부터.
+      await GuideService.instance.reset();
+
+      unawaited(SyncService.instance.syncNow(full: true));
       return AuthResult.ok();
     } on AuthException catch (err) {
       return AuthResult.fail(_mapAuthError(err));

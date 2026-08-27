@@ -39,6 +39,10 @@ import '../../widgets/stub_button.dart';
 /// 7. 배경 조명을 스플래시와 같은 값으로 맞췄습니다. `AppGate`의
 ///    `AnimatedSwitcher`가 넘어갈 때 배경이 이어져 종이 한 장이 얹히는
 ///    것처럼 보입니다.
+/// 8. **가입 모드에서 폼이 1.7px 넘치던 것**을 고쳤습니다. 원인과 처방은
+///    [build] 안의 주석에 적어 두었습니다. 요약하면, 높이를 고유 높이로
+///    미리 재는 슬리버를 걷어내고 "최소 높이만 보장하고 넘치면 스크롤"로
+///    바꿨습니다. 큰 글자 설정·작은 기기에서도 같은 이유로 안전합니다.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, this.initialMode = AuthMode.signIn});
 
@@ -354,13 +358,32 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
           SafeArea(
             child: AutofillGroup(
-              child: CustomScrollView(
-                // 폼이 짧으면 가운데, 키보드로 좁아지면 스크롤.
-                slivers: [
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
+              // ⚠️ 예전에는 `CustomScrollView` + `SliverFillRemaining(
+              //    hasScrollBody: false)` 였습니다. 그 슬리버는 자식의 높이를
+              //    **고유 높이(intrinsic height)** 로 미리 재서 그 값으로 상자를
+              //    못 박습니다. 그런데 이 폼 안에는 [AnimatedSize] 가 셋
+              //    (이름 칸·확인 칸·오류 문구) 있고, 애니메이션 중의 실제 높이는
+              //    고유 높이와 다릅니다. 가입 모드로 넘어가며 칸이 펴지는 동안
+              //    그 차이가 그대로 **"RenderFlex overflowed by 1.7 pixels"**
+              //    로 나왔습니다. 1.7 이라는 어중간한 값이 그 증거입니다.
+              //
+              //    아래 조합은 고유 높이를 아예 묻지 않습니다.
+              //      · 최소 높이 = 화면 높이  → 폼이 짧으면 가운데 정렬
+              //      · 최대 높이 = 무한       → 길어지면 그만큼 늘어나고 스크롤
+              //    Column 이 자기 크기를 스스로 정하므로 넘칠 자리가 없습니다.
+              child: LayoutBuilder(
+                builder: (context, viewport) {
+                  const pad = EdgeInsets.fromLTRB(28, 8, 28, 28);
+                  return SingleChildScrollView(
+                    padding: pad,
+                    // 키보드가 올라온 채로 스크롤하면 자연스럽게 내려갑니다.
+                    keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight:
+                        math.max(0, viewport.maxHeight - pad.vertical),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -412,8 +435,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ),

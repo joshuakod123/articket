@@ -36,6 +36,7 @@ class DrawerMasthead extends SliverPersistentHeaderDelegate {
     required this.ticketCount,
     required this.lastFiled,
     required this.onAdd,
+    this.plateKey,
   });
 
   /// 서랍에 꽂힌 서류철 수.
@@ -48,6 +49,14 @@ class DrawerMasthead extends SliverPersistentHeaderDelegate {
   final DateTime? lastFiled;
 
   final VoidCallback onAdd;
+
+  /// 펼친 표제 쪽 새 서류철 버튼에 물릴 키.
+  ///
+  /// 첫 안내(코치 마크)가 **이 버튼의 실제 좌표**를 읽어 그 자리만 도려냅니다.
+  /// 접힌 러닝 헤드 쪽 버튼에는 물리지 않습니다. 같은 [GlobalKey]가 한 트리에
+  /// 두 번 나타나면 어서션이 나고, 안내가 뜨는 시점은 스크롤이 맨 위(=표제가
+  /// 펼쳐진 상태)이기 때문입니다.
+  final GlobalKey? plateKey;
 
   /// 다 펼쳤을 때 높이. 표제 다섯 층이 들어갑니다.
   @override
@@ -99,6 +108,7 @@ class DrawerMasthead extends SliverPersistentHeaderDelegate {
                   ticketCount: ticketCount,
                   lastFiled: lastFiled,
                   onAdd: onAdd,
+                  plateKey: plateKey,
                 ),
               ),
             ),
@@ -138,7 +148,8 @@ class DrawerMasthead extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(DrawerMasthead old) =>
       old.folderCount != folderCount ||
           old.ticketCount != ticketCount ||
-          old.lastFiled != lastFiled;
+          old.lastFiled != lastFiled ||
+          old.plateKey != plateKey;
 }
 
 // ─────────────────────────────────────────────────
@@ -151,12 +162,14 @@ class _Expanded extends StatelessWidget {
     required this.ticketCount,
     required this.lastFiled,
     required this.onAdd,
+    this.plateKey,
   });
 
   final int folderCount;
   final int ticketCount;
   final DateTime? lastFiled;
   final VoidCallback onAdd;
+  final GlobalKey? plateKey;
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +243,7 @@ class _Expanded extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 14),
-                NewFilePlate(onTap: onAdd),
+                NewFilePlate(key: plateKey, onTap: onAdd),
               ],
             ),
 

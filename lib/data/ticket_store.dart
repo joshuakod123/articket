@@ -88,13 +88,24 @@ class TicketStore extends ChangeNotifier {
       });
     }
 
-    // 처음 켠 기기에만 예시를 깔아 둡니다.
-    // `seeded` 플래그를 따로 두는 이유: 사용자가 예시를 전부 지운 뒤 앱을
-    // 다시 켰을 때 예시가 되살아나면 안 되기 때문입니다.
-    if (!seeded && _folders.isEmpty && _tickets.isEmpty) {
-      _seed();
-      await _local.writeFlag(LocalStore.kSeeded, true);
-    }
+    // ⚠️ **예시 데이터를 더 이상 깔지 않습니다.**
+    //
+    // 예전에는 여기서 `mockFolders` · `mockTickets` 를 부어 넣었습니다.
+    // 화면을 만드는 동안에는 편했지만, 서버가 붙은 뒤로는 이런 일이
+    // 벌어졌습니다.
+    //
+    //   1. 앱을 처음 켬        → 이 기기에 예시 6장이 깔림
+    //   2. 새 사용자가 가입     → `adoptLocalDataThenSync()` 가 그 6장을
+    //                            **새 계정의 기록으로 서버에 올림**
+    //   3. 사용자가 본 첫 화면  → 가본 적 없는 모네·고흐 전시가 든 서랍
+    //
+    // 남의 기억을 자기 서랍에서 발견하는 셈입니다. 게다가 그걸 지우려면
+    // 여섯 번을 지워야 합니다. 빈 서랍이 훨씬 정직합니다. 대신 빈 서랍
+    // 화면과 첫 안내(`GuideService`)가 다음에 무엇을 할지 알려줍니다.
+    //
+    // `seeded` 는 아래 [_purgeLegacySample] 이 "이 기기에 예시가 깔린 적이
+    // 있는가"를 판단하는 데만 씁니다.
+    await _purgeLegacySample(hadSeed: seeded);
 
     // 구버전에서 올라온, 아직 번호가 없는 티켓에 지금 도장을 찍습니다.
     // 이렇게 찍힌 번호는 첫 동기화에서 `raise_ticket_counter` 가 서버 카운터로
@@ -107,9 +118,50 @@ class TicketStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _seed() {
+  /// 구버전이 이 기기에 깔아 둔 예시를 **한 번만** 걷어냅니다.
+  ///
+  /// 새로 설치한 기기에는 애초에 예시가 없으니 할 일이 없습니다. 문제는 이미
+  /// 예시를 받은 채로 쓰고 있던 기기입니다. 그냥 두면 업데이트 뒤에도 남의
+  /// 전시가 서랍에 그대로 있습니다.
+  ///
+  /// ## 지우는 기준을 좁게 잡았습니다
+  ///
+  /// * 티켓은 **예시 id 여섯 개**만 지웁니다.
+  /// * 서류철은 예시 id 다섯 개 중 **안이 빈 것만** 지웁니다.
+  ///
+  /// 사용자가 `2026 ARCHIVE` 안에 자기 티켓을 철해 뒀을 수 있습니다. 그
+  /// 서류철까지 지우면 사용자가 만든 기록이 같이 날아갑니다. 예시를 치우려다
+  /// 진짜 기록을 지우는 것보다는, 이름만 예시인 빈 서류철이 하나 남는 편이
+  /// 훨씬 낫습니다(그건 사용자가 직접 지울 수 있습니다).
+  ///
+  /// 지워진 것은 다음 동기화에서 서버에도 묘비가 세워집니다.
+  /// `SyncService._rescan()` 이 "그림자에는 있는데 목록에 없는 id"로 잡아냅니다.
+  Future<void> _purgeLegacySample({required bool hadSeed}) async {
+    if (await _local.readFlag(LocalStore.kSamplePurged)) return;
+    await _local.writeFlag(LocalStore.kSamplePurged, true);
+
+    // 예시가 깔린 적이 없는 기기라면 여기서 끝입니다.
+    if (!hadSeed) return;
+
+    _tickets.removeWhere((t) => kSampleTicketIds.contains(t.id));
+    _folders.removeWhere((f) =>
+    kSampleFolderIds.contains(f.id) &&
+        !_tickets.any((t) => t.folderId == f.id));
+
+    await _local.writeFlag(LocalStore.kSeeded, false);
+  }
+
+  /// **테스트·데모 전용.** 예시 데이터를 손으로 부어 넣습니다.
+  ///
+  /// 앱 실행 경로에서는 절대 부르지 않습니다. `test/widget_test.dart` 처럼
+  /// "서류철이 여러 장 있는 상태"가 필요한 자리에서만 씁니다.
+  @visibleForTesting
+  void seedSampleData() {
     _folders.addAll(mockFolders);
     _tickets.addAll(mockTickets);
+    _issueMissing();
+    _syncIssuedFloor();
+    notifyListeners();
   }
 
   /// 발권 도장이 없는 티켓(구버전 데이터 · 예시)에 관람일 순서대로 찍습니다.
@@ -159,6 +211,25 @@ class TicketStore extends ChangeNotifier {
   /// [_changed] → `noteChange()` 가 "티켓이 전부 사라졌다"고 읽고 **서버
   /// 전체에 묘비를 세웁니다.** 로그아웃하려던 사용자의 기록이 서버에서도
   /// 지워집니다. 여기서 순서를 지키므로 호출부는 신경 쓰지 않아도 됩니다.
+  /// ⚠ **두 번째 함정 — `_ready` 를 내리면 안 됩니다.**
+  ///
+  /// 예전에는 여기서 `_ready = false` 로 두었습니다. 그런데 [load] 는
+  /// `if (_ready) return;` 으로 시작하는 **부팅 전용** 메서드라, 앱을 껐다
+  /// 켜기 전에는 아무도 이 값을 다시 올려주지 않았습니다. 결과는 조용한
+  /// 데이터 유실입니다.
+  ///
+  ///   계정 삭제 · 계정 전환
+  ///     → `_ready = false`
+  ///     → [_persist] 가 첫 줄에서 되돌아감          → **아무것도 저장 안 됨**
+  ///     → `SyncService.noteChange()` 도 `isReady` 를 보고 되돌아감
+  ///                                                 → **아무것도 동기화 안 됨**
+  ///
+  /// 그 상태로 만든 티켓은 앱을 끄는 순간 사라졌습니다. 비운 뒤에도 저장소는
+  /// **비어 있는 채로 준비된 상태**입니다. 그게 사실에 맞습니다.
+  ///
+  /// 세 번째로, [LocalStore.wipe] 대신 [LocalStore.wipeData] 를 부릅니다.
+  /// 계정 전환 흐름에서는 이 호출 **직전에** 새 계정 정보가 저장되는데,
+  /// 예전 코드는 그걸 방금 지워버렸습니다.
   Future<void> wipe() async {
     await SyncService.instance.reset();
     await PosterStorage.instance.wipeLocal();
@@ -166,8 +237,7 @@ class TicketStore extends ChangeNotifier {
     _tickets.clear();
     _folders.clear();
     _issued.clear();
-    _ready = false;
-    await _local.wipe();
+    await _local.wipeData();
     notifyListeners();
   }
 

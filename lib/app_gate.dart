@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'data/sync_service.dart';
 import 'data/ticket_store.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/root_shell.dart';
 import 'services/auth_service.dart';
+import 'services/guide_service.dart';
 import 'theme/app_colors.dart';
 
 /// 스플래시 → 로그인 → 본 화면을 갈아 끼우는 자리.
@@ -69,13 +71,38 @@ class _AppGateState extends State<AppGate> {
     _boot();
   }
 
+  /// ## 여기서 순서를 지켜야 하는 이유 (이번에 고친 것)
+  ///
+  /// 예전에는 셋을 `Future.wait` 로 한꺼번에 돌렸습니다. 그리고 그 목록에
+  /// **`SyncService.attach()` 가 아예 빠져 있었습니다.**
+  ///
+  /// `attach()` 는 문서에 "`AppGate._boot()` 에서 [TicketStore.load] 뒤에
+  /// 부릅니다"라고 적혀 있었는데, 실제로는 앱 어디에서도 호출되지 않았습니다.
+  /// 그래서 `_attached` 가 영원히 false 였고, 그 결과는
+  ///
+  ///   · `noteChange()` 가 첫 줄에서 되돌아감  → **수정이 서버에 안 올라감**
+  ///   · `_rescan()` 도 마찬가지               → 지운 것도 반영 안 됨
+  ///   · 그림자·커서·묘비를 디스크에서 안 읽음 → 동기화가 돌 때마다 전부
+  ///     처음부터 다시 올림
+  ///
+  /// 에러는 한 줄도 안 났습니다. 사용자는 기기를 바꾸고 나서야 알게 됩니다.
+  ///
+  /// 이제 **읽기 → 붙이기 → 세션 복구** 순서로 줄을 세웁니다. `restore()` 가
+  /// 안에서 첫 동기화를 거는데, 그때는 저장소도 그림자도 준비돼 있어야
+  /// 합니다. 스플래시 최소 노출 시간만 옆에서 같이 흐릅니다.
   Future<void> _boot() async {
     try {
-      await Future.wait([
-        _auth.restore(),
-        _store.load(),
-        Future<void>.delayed(SplashScreen.minimumHold),
-      ]);
+      final hold = Future<void>.delayed(SplashScreen.minimumHold);
+
+      // 1. 기기에 있는 것부터. (SharedPreferences 라 보통 100ms 아래)
+      await _store.load();
+      await GuideService.instance.load();
+
+      // 2. 동기화 엔진을 저장소에 붙입니다. 반드시 load() 뒤.
+      await SyncService.instance.attach();
+
+      // 3. 세션 복구. 성공하면 여기서 첫 동기화가 걸립니다.
+      await Future.wait([_auth.restore(), hold]);
     } catch (e, s) {
       debugPrint('부팅 실패: $e\n$s');
       // 세션을 못 읽었으면 로그아웃 상태로 봅니다. 최소한 로그인 화면은 뜹니다.

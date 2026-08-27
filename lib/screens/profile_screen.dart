@@ -64,7 +64,9 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
       body: ListenableBuilder(
-        listenable: store,
+        // 티켓만 듣고 있으면, 서버에서 회원 번호·이름이 뒤늦게 내려와도
+        // 이 화면은 그대로 옛 값을 들고 있습니다. 둘 다 듣습니다.
+        listenable: Listenable.merge([store, AuthService.instance]),
         builder: (context, _) {
           final tickets = store.tickets;
           final now = DateTime.now();
@@ -77,9 +79,26 @@ class ProfileScreen extends StatelessWidget {
               : rated.map((t) => t.rating).reduce((a, b) => a + b) /
               rated.length;
 
-          // 가장 오래된 기록의 해 = 관람을 시작한 해.
-          // 회원 번호도 같은 값에서 나옵니다(TicketStore.memberSerialText).
-          final since = store.joinedYear;
+          // ⚠ 회원 번호는 **서버가 뽑은 것**을 씁니다.
+          //
+          // 예전에는 `store.memberSerialText` 였습니다. 그 값은
+          // `joinedYear.hashCode % 9000 + 1` 이라서
+          //
+          //   · 같은 해에 시작한 **모든 사용자가 같은 번호**를 받고,
+          //   · 가장 오래된 티켓을 지우면 `joinedYear` 가 바뀌면서
+          //     **회원 번호도 같이 바뀝니다.**
+          //
+          // 회원 번호는 바뀌면 안 되는 값입니다. 지금은 `profiles.member_no`
+          // 가 진짜 대장이고, 여기서는 그걸 그대로 찍습니다.
+          //
+          // 서버 번호가 아직 안 내려온 아주 짧은 순간(가입 직후 트리거가 행을
+          // 만들기 전)에는 `M-0000-0000` 자리표시가 뜹니다. 틀린 번호를
+          // 보여주는 것보다 "아직 안 나왔다"가 정직합니다.
+          final viewer = AuthService.instance.viewer;
+          final since = (viewer != null && viewer.memberYear > 0)
+              ? viewer.memberYear
+              : store.joinedYear;
+          final serial = viewer?.memberSerialText ?? 'M-0000-0000';
 
           // 최근에 본 것 여섯.
           final recent = tickets.toList()
@@ -113,7 +132,7 @@ class ProfileScreen extends StatelessWidget {
                     child: _MemberPlate(
                       total: tickets.length,
                       since: since,
-                      serial: store.memberSerialText,
+                      serial: serial,
                     ),
                   ),
                   const SizedBox(height: 22),

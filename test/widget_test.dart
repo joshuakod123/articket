@@ -11,17 +11,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:articket/screens/root_shell.dart';
 import 'package:articket/theme/app_theme.dart';
 import 'package:articket/data/ticket_store.dart';
+import 'package:articket/services/guide_service.dart';
 import 'package:articket/models/layer.dart';
 import 'package:articket/models/ticket.dart';
+import 'package:articket/data/serial.dart';
 import 'package:articket/widgets/index_tab.dart';
 import 'package:articket/widgets/stamp.dart';
 
 /// 테스트에서는 [AppGate]를 건너뛰고 본 화면만 띄웁니다.
 ///
-/// 앱을 통째로 켜면 스플래시 900ms + 로그인 화면을 지나야 하고, 그러려면
-/// 테스트마다 계정을 만들어 두어야 합니다. 여기서 보려는 건 서랍이지
-/// 로그인 흐름이 아니므로 [RootShell]을 직접 물립니다.
+/// 앱을 통째로 켜면 스플래시 최소 노출 시간 + 로그인 화면을 지나야 하고,
+/// 그러려면 테스트마다 계정을 만들어 두어야 합니다. 여기서 보려는 건
+/// 서랍이지 로그인 흐름이 아니므로 [RootShell]을 직접 물립니다.
 /// (로그인·탈퇴 흐름은 따로 테스트를 씁니다)
+///
+/// `active: false` 로 물린 [ArchiveScreen] 을 쓰지 않는 대신, `setUpAll` 에서
+/// **안내를 이미 본 것으로 표시**합니다. 안 그러면 모든 위젯 테스트가 첫
+/// 안내 화면 뒤에서 돌아가 아무것도 못 찾습니다.
 Widget _shell() => MaterialApp(theme: AppTheme.build(), home: const RootShell());
 
 void main() {
@@ -30,9 +36,19 @@ void main() {
   setUpAll(() async {
     // 저장소가 진짜 파일을 건드리지 않게 가짜 prefs 를 물립니다.
     SharedPreferences.setMockInitialValues({});
-    // 예전에는 TicketStore 생성자가 목업을 부어 넣었지만, 이제 load() 가
-    // 첫 실행일 때만 깝니다. 테스트에서도 한 번 불러 줘야 합니다.
     await TicketStore.instance.load();
+
+    // ⚠ `load()` 는 이제 **예시를 깔지 않습니다.**
+    //
+    // 갓 가입한 사용자의 서랍에 남의 전시가 들어 있으면 안 되기 때문입니다
+    // (mock_data.dart 문서 참고). 그래서 "서류철이 여러 장 쌓여 있는 상태"가
+    // 필요한 이 테스트들은 직접 깔아야 합니다.
+    TicketStore.instance.seedSampleData();
+
+    // 첫 안내를 이미 본 것으로. 안 하면 서랍 위에 투어 화면이 덮입니다.
+    await GuideService.instance.load();
+    await GuideService.instance.markTourSeen();
+    await GuideService.instance.markDrawerCoachSeen();
   });
 
   testWidgets('아카이브 홈에 서류철이 쌓여 있다', (WidgetTester tester) async {
@@ -41,7 +57,7 @@ void main() {
 
     expect(find.text('티켓 서랍'), findsOneWidget);
 
-    // 목업 폴더 개수만큼 서류철이 렌더링됩니다.
+    // 깔아 둔 예시 폴더 개수만큼 서류철이 렌더링됩니다.
     final folderCount = TicketStore.instance.folders.length;
     expect(find.byType(FolderCard), findsNWidgets(folderCount));
   });
@@ -201,23 +217,19 @@ void main() {
     store.remove(t.id);
   });
 
-  test('회원 번호는 티켓을 추가해도 바뀌지 않는다', () {
-    final store = TicketStore.instance;
-    final before = store.memberSerialText;
+  // 회원 번호는 이제 **서버가 뽑습니다**(`profiles.member_no`).
+  // 예전 로컬 규칙(`joinedYear.hashCode % 9000 + 1`)은
+  //   · 같은 해에 시작한 모든 사용자에게 같은 번호를 주고
+  //   · 가장 오래된 티켓을 지우면 번호가 바뀌었습니다.
+  // 그래서 "티켓을 추가해도 안 바뀐다"를 로컬 값으로 검사하는 것은
+  // 이제 의미가 없습니다. 대신 **번호 모양**만 못 박아 둡니다.
+  test('회원 번호와 발권 번호는 서로 다른 모양이다', () {
+    final member = memberSerial(since: 2025, no: 6);
+    final ticket = ticketSerial(year: 2025, seq: 6);
 
-    final fresh = Ticket(
-      id: 'test-member-1',
-      folderId: store.folders.first.id,
-      title: '회원 번호 시험',
-      venue: '어딘가',
-      // 시작 연도보다 나중이라 joinedYear는 그대로여야 합니다.
-      visitedAt: DateTime(store.joinedYear + 1, 5, 5),
-    );
-    store.add(fresh);
-    expect(store.memberSerialText, before);
-
-    store.remove(fresh.id);
-    expect(store.memberSerialText, before);
+    expect(member, 'M-2025-0006');
+    expect(ticket, 'AK-2025-006');
+    expect(member.startsWith(ticket.split('-').first), isFalse);
   });
 
   // ── 도장 ─────────────────────────────────────

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/guide_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/brand_logo.dart';
@@ -65,6 +66,12 @@ class SettingsScreen extends StatelessWidget {
                   _Section(
                     label: 'ABOUT',
                     children: [
+                      _Row(
+                        title: '앱 안내 다시 보기',
+                        note: '서랍으로 돌아가면 처음 안내가 다시 뜹니다',
+                        chevron: true,
+                        onTap: () => _replayGuide(context),
+                      ),
                       const _Row(title: '버전', value: '0.1.0'),
                       _Row(
                         title: '이용약관',
@@ -114,6 +121,23 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 안내를 처음 상태로 되돌립니다.
+  ///
+  /// 여기서 바로 투어를 띄우지 않는 이유: 코치 마크는 **서랍 화면의 버튼
+  /// 좌표**를 읽어 도려냅니다. 설정 화면 위에서 띄우면 그 버튼들이 화면에
+  /// 없어 구멍이 엉뚱한 데 뚫립니다. 표시만 지우고, 서랍으로 돌아갔을 때
+  /// `ArchiveScreen`이 평소처럼 안내를 시작하게 둡니다.
+  ///
+  /// ⚠ [ArchiveScreen]은 `IndexedStack` 안에 살아 있어서 다시 `initState`가
+  /// 돌지 않습니다. 그래서 [GuideService]를 듣고 있다가 표시가 지워지면
+  /// 스스로 다시 시작합니다.
+  Future<void> _replayGuide(BuildContext context) async {
+    await GuideService.instance.reset();
+    if (!context.mounted) return;
+    PaperToast.done(context, '안내를 처음으로 되돌렸습니다',
+        detail: '서랍 탭으로 돌아가면 다시 보여드립니다');
   }
 
   Future<void> _rename(BuildContext context, String current) async {
