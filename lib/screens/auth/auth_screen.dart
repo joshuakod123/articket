@@ -281,16 +281,33 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
     // 서버(지금은 로컬)가 돌려준 실패를 **해당 칸 아래로** 내려보냅니다.
     // 토스트만 띄우면 어느 칸을 고쳐야 하는지 알 수 없습니다.
+    // 서버가 돌려준 실패를 **해당 칸 아래로** 내려보냅니다.
+    // 토스트만 띄우면 어느 칸을 고쳐야 하는지 알 수 없습니다.
     setState(() {
       switch (result.failure!) {
         case AuthFailure.emptyName:
           _nameError = result.message;
+
         case AuthFailure.badEmail:
         case AuthFailure.alreadyExists:
+        // 메일함을 확인하라는 안내도 이메일 칸 아래가 맞습니다.
+        case AuthFailure.needsEmailConfirm:
           _emailError = result.message;
+
         case AuthFailure.weakPassword:
         case AuthFailure.wrongCredentials:
           _passwordError = result.message;
+
+      // ── 서버가 생기면서 늘어난 것들 ──
+      //
+      // 이 넷은 **어느 칸의 잘못도 아닙니다.** 입력칸 아래에 빨간 줄을
+      // 그으면 사용자가 멀쩡한 비밀번호를 지우고 다시 칩니다.
+      // 아래 PaperToast 로만 알립니다.
+        case AuthFailure.offline:
+        case AuthFailure.tooManyAttempts:
+        case AuthFailure.serverError:
+        case AuthFailure.notConfigured:
+          break;
       }
     });
     _reject();

@@ -33,13 +33,23 @@ class SupabaseEnv {
   //
   // 붙여넣을 거면 `.gitignore` 는 못 씁니다(소스에 박히니까). 공개 레포라면
   // 아래는 비워두고 --dart-define 을 쓰세요.
-  static const _fallbackUrl = 'https://cukfijaxayfnimrgfinq.supabase.co/rest/v1/';      // 예: 'https://abcdefgh.supabase.co'
+  static const _fallbackUrl = 'https://cukfijaxayfnimrgfinq.supabase.co';      // 예: 'https://abcdefgh.supabase.co'
   static const _fallbackAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1a2ZpamF4YXlmbmltcmdmaW5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NjY4ODQsImV4cCI6MjEwMzI0Mjg4NH0.bmj7B8Mihxt5NnEwtncIY9cig24jjtZHQVO5uOqaI0o';  // 예: 'eyJhbGciOiJIUzI1NiIsInR5cCI6...'
 
   static const _defineUrl = String.fromEnvironment('SUPABASE_URL');
   static const _defineAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   static String get url => _defineUrl.isNotEmpty ? _defineUrl : _fallbackUrl;
+  static String _normalize(String raw) {
+    var u = raw.trim();
+    while (u.endsWith('/')) {
+      u = u.substring(0, u.length - 1);
+    }
+    for (final tail in const ['/rest/v1', '/auth/v1', '/storage/v1', '/functions/v1']) {
+      if (u.endsWith(tail)) u = u.substring(0, u.length - tail.length);
+    }
+    return u;
+  }
 
   static String get anonKey =>
       _defineAnonKey.isNotEmpty ? _defineAnonKey : _fallbackAnonKey;
