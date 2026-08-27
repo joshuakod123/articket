@@ -514,8 +514,8 @@ class _EditorScreenState extends State<EditorScreen> {
     ));
 
     if (path == null || path.isEmpty) {
-      PaperToast.show(context, '빈 폴라로이드를 붙였습니다',
-          detail: '두 번 누르면 사진을 넣을 수 있습니다');
+      PaperToast.show(context, '빈 폴라로이드를 한 장 붙였어요',
+          detail: '두 번 누르면 사진이 들어가요');
     }
   }
 
@@ -532,8 +532,10 @@ class _EditorScreenState extends State<EditorScreen> {
       );
       return shot?.path;
     } catch (e) {
+      debugPrint('image pick failed: $e');
       if (mounted) {
-        PaperToast.warn(context, '사진을 불러오지 못했습니다', detail: '$e');
+        PaperToast.warn(context, '사진을 불러오지 못했어요',
+            detail: '앨범 접근 권한을 확인해 주세요');
       }
       return null;
     }
@@ -546,7 +548,8 @@ class _EditorScreenState extends State<EditorScreen> {
     store.removeLayer(widget.ticketId, layer.id);
     Feel.stamp();
     setState(() => _selectedId = null);
-    PaperToast.show(context, '한 겹 떼어냈습니다', detail: '↩︎ 로 되돌릴 수 있습니다');
+    PaperToast.show(context, '붙였던 걸 하나 뗐어요',
+        detail: '위쪽 ↩︎ 를 누르면 돌아와요');
   }
 
   /// 선택한 레이어를 한 칸(7.5°) 돌립니다.
@@ -1007,39 +1010,75 @@ class _Toolbar extends StatelessWidget {
           const WallGrain(opacity: 0.05, seed: 31),
           SafeArea(
             top: false,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  Row(
-                    key: faceKey,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _tool(Icons.crop_free, '프레임', onFrame),
-                      _tool(Icons.wallpaper_outlined, '포스터', onPoster),
-                    ],
-                  ),
-                  Row(
-                    key: decorateKey,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _tool(Icons.auto_awesome_outlined, '스티커', onSticker),
-                      _tool(Icons.approval_outlined, '도장', onStamp),
-                      _tool(Icons.text_fields, '글자', onText),
-                      _tool(Icons.horizontal_rule, '테이프', onTape),
-                      _tool(Icons.photo_outlined, '폴라로이드', onPhoto),
-                    ],
-                  ),
-                  Row(
-                    key: recordKey,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _tool(Icons.edit_note, '기록', onInfo),
-                    ],
-                  ),
-                ],
-              ),
+            // 여덟 개를 **한 화면에 다 보이게** 합니다.
+            //
+            // 예전에는 무조건 가로로 굴러갔고, 맨 끝 「기록」이 화면 밖에
+            // 있었습니다. 그래서 (1) 티켓 뒷면을 적는 길이 있는지조차
+            // 모르는 사람이 생겼고 (2) 코치 마크 STEP 04 는 화면 밖 좌표에
+            // 구멍을 뚫어 아무 데도 가리키지 않았습니다.
+            //
+            // 폭이 정말 모자란 기기(작은 화면 + 큰 글자 크기)에서만 예전처럼
+            // 굴러가게 두고, 그때는 코치 마크가 스스로 대상을 밀어 올립니다.
+            child: LayoutBuilder(
+              builder: (context, box) {
+                const count = 8;
+                const minTool = 40.0;
+                const hPad = 4.0;
+
+                // 1pt 를 남깁니다. 여덟 칸이 폭을 딱 나눠 가지면 부동소수점
+                // 반올림 한 번에 0.0001pt 짜리 RenderFlex overflow 줄무늬가
+                // 뜹니다. 눈에는 안 보이지만 콘솔에는 매 프레임 찍힙니다.
+                final fitted = (box.maxWidth - hPad * 2 - 1) / count;
+                final fits = fitted >= minTool;
+                final toolWidth = fits ? fitted : minTool + 18;
+
+                final row = Row(
+                  mainAxisSize: fits ? MainAxisSize.max : MainAxisSize.min,
+                  children: [
+                    Row(
+                      key: faceKey,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _tool(Icons.crop_free, '프레임', onFrame, toolWidth),
+                        _tool(Icons.wallpaper_outlined, '포스터', onPoster,
+                            toolWidth),
+                      ],
+                    ),
+                    Row(
+                      key: decorateKey,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _tool(Icons.auto_awesome_outlined, '스티커', onSticker,
+                            toolWidth),
+                        _tool(Icons.approval_outlined, '도장', onStamp,
+                            toolWidth),
+                        _tool(Icons.text_fields, '글자', onText, toolWidth),
+                        _tool(Icons.horizontal_rule, '테이프', onTape, toolWidth),
+                        _tool(Icons.photo_outlined, '폴라로이드', onPhoto,
+                            toolWidth),
+                      ],
+                    ),
+                    Row(
+                      key: recordKey,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _tool(Icons.edit_note, '기록', onInfo, toolWidth),
+                      ],
+                    ),
+                  ],
+                );
+
+                const padding = EdgeInsets.symmetric(
+                    horizontal: hPad, vertical: 6);
+
+                return fits
+                    ? Padding(padding: padding, child: row)
+                    : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: padding,
+                  child: row,
+                );
+              },
             ),
           ),
         ],
@@ -1047,18 +1086,39 @@ class _Toolbar extends StatelessWidget {
     );
   }
 
-  Widget _tool(IconData icon, String label, VoidCallback onTap) => InkWell(
-    onTap: onTap,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 21, color: AppColors.ink),
-          const SizedBox(height: 5),
-          Text(label, style: AppText.ui(size: 10, color: AppColors.inkSoft)),
-        ],
-      ),
-    ),
-  );
+  /// 버튼 한 칸. 폭을 밖에서 못 박아 여덟 개가 정확히 나눠 갖게 합니다.
+  ///
+  /// 「폴라로이드」처럼 긴 이름은 칸보다 넓어질 수 있어서, 라벨만
+  /// [FittedBox] 로 눌러 담습니다. 아이콘 크기는 건드리지 않습니다.
+  Widget _tool(
+      IconData icon,
+      String label,
+      VoidCallback onTap,
+      double width,
+      ) =>
+      SizedBox(
+        width: width,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 21, color: AppColors.ink),
+                const SizedBox(height: 5),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: AppText.ui(size: 10, color: AppColors.inkSoft),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }

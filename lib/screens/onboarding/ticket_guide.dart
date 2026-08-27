@@ -93,54 +93,76 @@ class _WorkshopSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+
+    // 시트가 올라올 수 있는 최대 높이. 상태 바·노치는 항상 비워 둡니다.
+    // 예전에는 [PaperSurface]가 제약 최대치까지 늘어나면서 시트가 화면
+    // 꼭대기까지 올라갔고, 표제가 노치 뒤로 들어갔습니다.
+    final maxHeight = media.size.height - media.padding.top - 28;
+
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        child: DecoratedBox(
-          decoration: BoxDecoration(boxShadow: paperShadow(depth: 1.1)),
-          child: PaperSurface(
-            color: AppColors.stockLight,
-            grain: 0.05,
-            seed: 61,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 표제. 여기만 인쇄물 말투를 유지합니다.
-                  Text('HOW TO MAKE ONE',
-                      style: AppText.eyebrow(color: AppColors.foil, size: 9)),
-                  const SizedBox(height: 10),
-                  Text(
-                    '티켓 한 장 만드는 법',
-                    style: AppText.display(size: 25, color: AppColors.ink),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '순서대로 안 해도 괜찮아요. 나중에 다 고쳐져요.',
-                    style: AppText.ui(
-                        size: 12.5, height: 1.6, color: AppColors.inkSoft),
-                  ),
-                  const SizedBox(height: 18),
-                  Container(height: 1, color: AppColors.line),
-
-                  for (final s in _steps) _StepRow(step: s),
-
-                  const SizedBox(height: 20),
-                  Center(
-                    child: TicketStubButton(
-                      onPressed: () {
-                        Feel.stamp();
-                        Navigator.of(context).maybePop();
-                      },
-                      label: '만들러 가기',
-                      code: 'GO',
-                      width: 220,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: DecoratedBox(
+            decoration: BoxDecoration(boxShadow: paperShadow(depth: 1.1)),
+            child: PaperSurface(
+              color: AppColors.stockLight,
+              grain: 0.05,
+              seed: 61,
+              // 글자 크기를 크게 키워 둔 기기에서는 세 단계가 화면보다
+              // 길어질 수 있습니다. 잘라내지 않고 굴러가게 둡니다.
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 손잡이. 시트라는 것을 알려주는 최소한의 표시.
+                    Center(
+                      child: Container(
+                        width: 38,
+                        height: 3,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        color: AppColors.line,
+                      ),
                     ),
-                  ),
-                ],
+
+                    // 표제. 여기만 인쇄물 말투를 유지합니다.
+                    Text('HOW TO MAKE ONE',
+                        style: AppText.eyebrow(color: AppColors.foil, size: 9)),
+                    const SizedBox(height: 9),
+                    Text(
+                      '티켓 한 장 만드는 법',
+                      style: AppText.display(size: 24, color: AppColors.ink),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '순서대로 안 해도 괜찮아요. 나중에 다 고쳐져요.',
+                      style: AppText.ui(
+                          size: 12.5, height: 1.55, color: AppColors.inkSoft),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(height: 1, color: AppColors.line),
+
+                    for (final s in _steps) _StepRow(step: s),
+
+                    const SizedBox(height: 18),
+                    Center(
+                      child: TicketStubButton(
+                        onPressed: () {
+                          Feel.stamp();
+                          Navigator.of(context).maybePop();
+                        },
+                        label: '만들러 가기',
+                        code: 'GO',
+                        width: 220,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -158,16 +180,19 @@ class _StepRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.only(top: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 도판은 본문 두 줄과 눈높이를 맞춥니다. 예전 56pt 는 글줄보다
+          // 커서 번호·제목·본문의 무게 중심이 아래로 밀렸습니다.
+          const SizedBox(width: 4),
           SizedBox(
-            width: 56,
-            height: 56,
+            width: 48,
+            height: 48,
             child: CustomPaint(painter: _PlatePainter(step.plate)),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,7 +412,9 @@ List<CoachStep> ticketEditorCoachSteps({
       target: recordKey,
       eyebrow: 'STEP 04',
       title: '뒷면에 적기',
-      body: '제목이랑 별점, 한 줄 평은 여기서 적어요. 적은 건 티켓 뒷면에 인쇄돼요.',
+      // 도구 줄 맨 끝에 혼자 떨어져 있는 버튼이라, 이름을 불러 줍니다.
+      body: '맨 오른쪽 「기록」이에요. 제목이랑 별점, 한 줄 평을 여기서 적으면 '
+          '티켓 뒷면에 인쇄돼요.',
       pad: const EdgeInsets.fromLTRB(4, 6, 4, 6),
       side: CoachSide.above,
     ),

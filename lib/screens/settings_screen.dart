@@ -86,12 +86,12 @@ class SettingsScreen extends StatelessWidget {
                       _Row(
                         title: '이용약관',
                         chevron: true,
-                        onTap: () => PaperToast.show(context, '아직 준비 중이에요'),
+                        onTap: () => PaperToast.show(context, '아직 준비 중인 기능이에요'),
                       ),
                       _Row(
                         title: '개인정보 처리방침',
                         chevron: true,
-                        onTap: () => PaperToast.show(context, '아직 준비 중이에요'),
+                        onTap: () => PaperToast.show(context, '아직 준비 중인 기능이에요'),
                       ),
                     ],
                   ),

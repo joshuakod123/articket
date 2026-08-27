@@ -95,9 +95,40 @@ class _CoachLayer extends StatefulWidget {
 class _CoachLayerState extends State<_CoachLayer> {
   int _i = 0;
 
+  /// 좌표를 다시 재게 만드는 값. 스크롤이 끝나면 하나 올립니다.
+  int _measure = 0;
+
   CoachStep get _step => widget.steps[_i];
 
-  /// 대상 위젯의 화면 좌표. 못 찾으면 null.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+  }
+
+  /// 대상을 **화면 안으로 들여놓은 뒤** 좌표를 잽니다.
+  ///
+  /// 에디터 도구 줄은 가로로 굴러갑니다. 맨 끝의 「기록」은 처음에 화면
+  /// 오른쪽 밖에 있었고, 그 자리에 뚫린 구멍은 화면 밖이라 보이지 않았습니다.
+  /// 사용자에게는 **아무 데도 가리키지 않는 안내**로 보입니다.
+  /// 그래서 먼저 스크롤을 밀어 대상을 보이게 하고, 그다음에 잽니다.
+  Future<void> _reveal() async {
+    final ctx = _step.target?.currentContext;
+    if (ctx != null && ctx.mounted) {
+      await Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted) return;
+    // 스크롤이 반영된 다음 프레임에 다시 잽니다.
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) setState(() => _measure++);
+  }
+
+  /// 대상 위젯의 화면 좌표. 못 찾거나 화면 밖이면 null.
   ///
   /// 이 막은 화면 전체를 덮는 라우트라 좌표계가 화면과 같습니다.
   /// 따로 변환할 것이 없습니다.
@@ -107,7 +138,20 @@ class _CoachLayerState extends State<_CoachLayer> {
     final box = ctx.findRenderObject();
     if (box is! RenderBox || !box.hasSize) return null;
     if (box.size.isEmpty) return null;
-    return s.pad.inflateRect(box.localToGlobal(Offset.zero) & box.size);
+
+    final rect = s.pad.inflateRect(box.localToGlobal(Offset.zero) & box.size);
+
+    // 스크롤을 밀었는데도 대상이 대부분 화면 밖이면 구멍을 뚫지 않습니다.
+    // 허공에 난 구멍보다 가운데 카드만 뜨는 편이 정직합니다.
+    final screen = Offset.zero & MediaQuery.sizeOf(context);
+    final visibleW = math.min(rect.right, screen.right) -
+        math.max(rect.left, screen.left);
+    final visibleH = math.min(rect.bottom, screen.bottom) -
+        math.max(rect.top, screen.top);
+    if (visibleW < rect.width * 0.6 || visibleH < rect.height * 0.6) {
+      return null;
+    }
+    return rect;
   }
 
   void _next() {
@@ -117,6 +161,7 @@ class _CoachLayerState extends State<_CoachLayer> {
     }
     Feel.pick();
     setState(() => _i++);
+    _reveal();
   }
 
   void _close() {
@@ -191,16 +236,80 @@ class _CoachLayerState extends State<_CoachLayer> {
 
     final insets = MediaQuery.paddingOf(context);
 
+    // 카드에서 구멍 쪽으로 내민 삼각 꼭지. 구멍이 작을수록(도구 버튼 한 개)
+    // "이 카드가 저기를 말하는 중"이라는 연결이 약해집니다. 꼭지를 구멍의
+    // 가로 중심에 맞춰 두면 눈이 알아서 따라갑니다.
+    const margin = 20.0;
+    final cardWidth = size.width - margin * 2;
+    final x = cardWidth <= 0
+        ? 0.0
+        : (((hole.center.dx - margin) / cardWidth) * 2 - 1).clamp(-0.82, 0.82);
+
+    // 카드 테두리와 꼭지 밑변이 만나는 자리에 1pt 선이 남지 않도록 겹칩니다.
+    final pointer = Transform.translate(
+      offset: Offset(0, below ? 1 : -1),
+      child: Align(
+        alignment: Alignment(x.toDouble(), 0),
+        child: CustomPaint(
+          size: const Size(18, 9),
+          // 카드가 구멍 **아래**에 있으면 구멍은 위에 있습니다. 꼭지도 위를.
+          painter: _PointerPainter(up: below),
+        ),
+      ),
+    );
+
     return Positioned(
-      left: 20,
-      right: 20,
-      top: below ? math.min(hole.bottom + 18, size.height - 210) : null,
+      left: margin,
+      right: margin,
+      top: below ? math.min(hole.bottom + 12, size.height - 220) : null,
       bottom: below
           ? null
-          : math.max(size.height - hole.top + 18, insets.bottom + 16),
-      child: card,
+          : math.max(size.height - hole.top + 12, insets.bottom + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        // 꼭지가 카드 폭 안에서 좌우로 움직일 수 있어야 하므로 늘려 둡니다.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: below ? [pointer, card] : [card, pointer],
+      ),
     );
   }
+}
+
+/// 카드에서 구멍 쪽으로 내민 삼각 꼭지.
+class _PointerPainter extends CustomPainter {
+  const _PointerPainter({required this.up});
+
+  /// true 면 위(카드 위쪽 구멍)를, false 면 아래를 가리킵니다.
+  final bool up;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final tip = up
+        ? Offset(size.width / 2, 0)
+        : Offset(size.width / 2, size.height);
+    final baseY = up ? size.height : 0.0;
+
+    final path = Path()
+      ..moveTo(0, baseY)
+      ..lineTo(tip.dx, tip.dy)
+      ..lineTo(size.width, baseY)
+      ..close();
+
+    canvas.drawPath(path, Paint()..color = AppColors.stock);
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, baseY)
+        ..lineTo(tip.dx, tip.dy)
+        ..lineTo(size.width, baseY),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = AppColors.foil.withValues(alpha: 0.5),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PointerPainter old) => old.up != up;
 }
 
 // ─────────────────────────────────────────────────────────────

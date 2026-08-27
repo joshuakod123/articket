@@ -174,10 +174,25 @@ class PaperSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ⚠️ 바탕색과 결은 **크기를 만들지 않습니다.**
+    //
+    // 예전에는 바탕이 `Container(color: color)` 한 장으로 Stack의 첫 자식,
+    // 그것도 non-positioned 자식이었습니다. 그래서 Stack의 크기를 [child]가
+    // 아니라 **바탕이** 정했고, 들어오는 제약에 따라 두 가지로 어긋났습니다.
+    //
+    // | 들어오는 높이 제약 | 그때 Container | 결과 |
+    // |---|---|---|
+    // | 유계 (예: 모달 시트) | 최대치까지 늘어남 | 내용이 짧아도 **화면을 꽉 채움** |
+    // | 무계 (예: `Positioned(bottom:)`) | 0으로 접힘 | **바탕색이 아예 안 칠해짐** |
+    //
+    // 앞의 것이 "티켓 만드는 법" 시트가 상태 바까지 올라간 이유고,
+    // 뒤의 것이 종이 쪽지 알림이 반투명해 보인 이유입니다. 둘 다 같은 줄에서
+    // 났습니다. 이제 바탕도 결도 `Positioned.fill` 이라 Stack의 크기는
+    // 오직 [child] 가 정하고, 바탕은 그 크기에 정확히 맞춰 칠해집니다.
     return Stack(
       fit: StackFit.passthrough,
       children: [
-        Container(color: color),
+        Positioned.fill(child: ColoredBox(color: color)),
         Positioned.fill(
           child: IgnorePointer(
             child: CustomPaint(

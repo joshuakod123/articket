@@ -274,7 +274,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     ));
 
     if (path == null || path.isEmpty) {
-      PaperToast.show(context, '폴라로이드 붙였어요',
+      PaperToast.show(context, '빈 폴라로이드를 한 장 붙였어요',
           detail: '두 번 누르면 사진이 들어가요');
     }
   }
@@ -291,7 +291,9 @@ class _PageDecorScreenState extends State<PageDecorScreen>
       );
       return shot?.path;
     } catch (e) {
-      if (mounted) PaperToast.warn(context, '사진을 못 불러왔어요', detail: '$e');
+      debugPrint('image pick failed: $e');
+      if (mounted) PaperToast.warn(context, '사진을 불러오지 못했어요',
+          detail: '앨범 접근 권한을 확인해 주세요');
       return null;
     }
   }
@@ -337,7 +339,8 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     store.touch();
     Feel.tear();
     setState(() => _selected = null);
-    PaperToast.show(context, '한 겹 뗐어요', detail: '↩︎ 누르면 돌아와요');
+    PaperToast.show(context, '붙였던 걸 하나 뗐어요',
+        detail: '위쪽 ↩︎ 를 누르면 돌아와요');
   }
 
   Future<void> _edit(ScrapLayer layer) async {

@@ -51,6 +51,35 @@ enum ShareTrim {
   final String label;
 }
 
+/// 소품을 찍는 **잉크 색**.
+///
+/// 예전에는 소품 색을 종이색에서 자동으로 뽑았습니다(`stock.text`).
+/// 종이 위에서는 대비가 맞았지만, 도장은 티켓·스크랩북 **작품 위에** 찍혀서
+/// 그 아래 색이 무엇이냐에 따라 그대로 묻혔습니다. 올리브 종이 + 짙은 티켓
+/// 조합에서는 도장이 있는지조차 보이지 않았습니다.
+///
+/// 도장 자리를 종이 위로 옮겨 대비를 예측 가능하게 만든 다음, 그래도 원하는
+/// 색이 따로 있을 사람을 위해 고를 수 있게 열어 둡니다.
+enum ShareInk {
+  /// 종이색에 맞춰 알아서. 기본값이고, 항상 읽힙니다.
+  auto('자동', null),
+  ink('먹', Color(0xFF241F1A)),
+  oxblood('옥스블러드', Color(0xFF6B1F1A)),
+  foil('황동', Color(0xFF8C7134)),
+  olive('올리브', Color(0xFF44503F)),
+  navy('네이비', Color(0xFF2F3D4C)),
+  cream('미색', Color(0xFFFCF8EE));
+
+  const ShareInk(this.label, this.color);
+
+  final String label;
+
+  /// null 이면 종이색이 정합니다.
+  final Color? color;
+
+  Color on(ShareStock stock) => color ?? stock.text;
+}
+
 /// 결. 서류철에 쓰던 질감 페인터를 그대로 빌려 씁니다.
 /// `null`은 무늬 없는 매끈한 종이입니다.
 const _grains = <(FolderTexture?, String)>[
@@ -108,8 +137,9 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
   ShareStock _stock = ShareStock.cream;
   FolderTexture? _grain = FolderTexture.kraft;
   ShareTrim _trim = ShareTrim.tape;
+  ShareInk _ink = ShareInk.auto;
 
-  /// 0 = 종이, 1 = 결, 2 = 소품.
+  /// 0 = 종이, 1 = 결, 2 = 소품, 3 = 잉크.
   int _tab = 0;
 
   bool _busy = false;
@@ -125,7 +155,10 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
         targetWidth: _exportWidth,
       );
     } catch (e) {
-      if (mounted) PaperToast.warn(context, '공유하지 못했어요', detail: '$e');
+      // 사용자에게는 사람 말로, 콘솔에는 원문 그대로.
+      debugPrint('share card failed: $e');
+      if (mounted) PaperToast.warn(context, '카드를 내보내지 못했어요',
+          detail: '잠시 뒤에 다시 눌러 주세요');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -158,6 +191,7 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
                           stock: _stock,
                           grain: _grain,
                           trim: _trim,
+                          ink: _ink,
                           artwork: widget.artwork,
                           title: widget.title,
                           subtitle: widget.subtitle,
@@ -174,12 +208,15 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
             stock: _stock,
             grain: _grain,
             trim: _trim,
+            ink: _ink,
             tab: _tab,
             busy: _busy,
             onTab: (i) => setState(() => _tab = i),
             onStock: (s) => setState(() => _stock = s),
             onGrain: (g) => setState(() => _grain = g),
+            // 소품을 '없음'에서 바꾸면 잉크 칸이 바로 뜻을 갖습니다.
             onTrim: (t) => setState(() => _trim = t),
+            onInk: (i) => setState(() => _ink = i),
             onShare: _share,
           ),
         ],
@@ -197,6 +234,7 @@ class _Card extends StatelessWidget {
     required this.stock,
     required this.grain,
     required this.trim,
+    required this.ink,
     required this.artwork,
     required this.title,
     required this.subtitle,
@@ -206,16 +244,29 @@ class _Card extends StatelessWidget {
   final ShareStock stock;
   final FolderTexture? grain;
   final ShareTrim trim;
+  final ShareInk ink;
   final Widget artwork;
   final String title;
   final String subtitle;
   final String meta;
+
+  /// 도장이 아래쪽 표제 칸에서 차지하는 폭. 글줄이 그 밑으로 들어가지
+  /// 않도록 표제·부제에 같은 만큼 오른쪽 여백을 줍니다.
+  ///
+  /// 도장 자체는 약 100pt(고정폭 날짜 열 자 + 두 겹 테두리)이고, 기울여
+  /// 찍으므로 좌우로 3pt씩 더 번집니다. 카드 오른쪽 여백 24pt 안으로
+  /// 들어가는 몫을 빼고 잡은 값입니다.
+  static const _stampReserve = 100.0;
 
   @override
   Widget build(BuildContext context) {
     final onPaper = stock.text;
     final faint = onPaper.withValues(alpha: 0.55);
     final seed = title.hashCode;
+
+    // 소품에 쓸 잉크. '자동'이면 종이색이 정합니다.
+    final trimInk = ink.on(stock);
+    final stamped = trim == ShareTrim.stamp;
 
     final content = Stack(
       children: [
@@ -227,7 +278,7 @@ class _Card extends StatelessWidget {
             child: WashiTape(
               width: 96,
               height: 24,
-              color: onPaper.withValues(alpha: 0.16),
+              color: trimInk.withValues(alpha: 0.20),
               angle: -0.5,
             ),
           ),
@@ -236,7 +287,7 @@ class _Card extends StatelessWidget {
             child: IgnorePointer(
               child: CustomPaint(
                 painter: _PhotoCornerPainter(
-                  color: onPaper.withValues(alpha: 0.30),
+                  color: trimInk.withValues(alpha: 0.34),
                 ),
               ),
             ),
@@ -270,41 +321,53 @@ class _Card extends StatelessWidget {
 
               Container(height: 1, color: faint.withValues(alpha: 0.35)),
               const SizedBox(height: 14),
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.display(size: 21, color: onPaper),
+              Padding(
+                padding: EdgeInsets.only(right: stamped ? _stampReserve : 0),
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.display(size: 21, color: onPaper),
+                ),
               ),
               const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.ui(size: 11.5, color: faint),
-                    ),
-                  ),
-                  if (meta.isNotEmpty) ...[
-                    const SizedBox(width: 10),
-                    Text(meta,
+              Padding(
+                padding: EdgeInsets.only(right: stamped ? _stampReserve : 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        subtitle,
                         maxLines: 1,
-                        style: AppText.data(size: 10, color: faint)),
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.ui(size: 11.5, color: faint),
+                      ),
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(width: 10),
+                      Text(meta,
+                          maxLines: 1,
+                          style: AppText.data(size: 10, color: faint)),
+                    ],
                   ],
-                ],
+                ),
               ),
             ],
           ),
         ),
 
-        // 도장은 글자 위에 찍혀야 도장처럼 보입니다. 그래서 맨 위.
-        if (trim == ShareTrim.stamp)
+        // 도장.
+        //
+        // 예전에는 `bottom: 96` 이라 작품 오른쪽 아래에 걸쳤습니다. 종이색에서
+        // 뽑은 흐린 색(alpha 0.42)이 짙은 티켓이나 스크랩북 위에 얹히니
+        // 그대로 사라졌습니다. "도장은 글자 위에 찍혀야 도장 같다"는 말은
+        // 맞지만, 그 글자는 **표제 칸의 글자**여야 합니다. 거기는 늘 종이 위라
+        // 대비를 계산할 수 있습니다.
+        if (stamped)
           Positioned(
-            right: 20,
-            bottom: 96,
-            child: _RubberStamp(color: onPaper.withValues(alpha: 0.42)),
+            right: 18,
+            bottom: 20,
+            child: _RubberStamp(color: trimInk.withValues(alpha: 0.88)),
           ),
       ],
     );
@@ -427,18 +490,21 @@ class _Bottom extends StatelessWidget {
     required this.stock,
     required this.grain,
     required this.trim,
+    required this.ink,
     required this.tab,
     required this.busy,
     required this.onTab,
     required this.onStock,
     required this.onGrain,
     required this.onTrim,
+    required this.onInk,
     required this.onShare,
   });
 
   final ShareStock stock;
   final FolderTexture? grain;
   final ShareTrim trim;
+  final ShareInk ink;
   final int tab;
   final bool busy;
 
@@ -446,9 +512,10 @@ class _Bottom extends StatelessWidget {
   final ValueChanged<ShareStock> onStock;
   final ValueChanged<FolderTexture?> onGrain;
   final ValueChanged<ShareTrim> onTrim;
+  final ValueChanged<ShareInk> onInk;
   final VoidCallback onShare;
 
-  static const _tabs = ['종이', '결', '소품'];
+  static const _tabs = ['종이', '결', '소품', '잉크'];
 
   @override
   Widget build(BuildContext context) {
@@ -517,7 +584,13 @@ class _Bottom extends StatelessWidget {
                     grain: grain,
                     onPick: onGrain,
                   ),
-                  _ => _TrimRow(trim: trim, onPick: onTrim),
+                  2 => _TrimRow(trim: trim, onPick: onTrim),
+                  _ => _InkRow(
+                    stock: stock,
+                    trim: trim,
+                    ink: ink,
+                    onPick: onInk,
+                  ),
                 },
               ),
 
@@ -725,6 +798,92 @@ class _TrimRow extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+/// 소품을 찍을 잉크 색.
+///
+/// 견본은 **지금 고른 종이 위에** 찍어 보여줍니다. 색 동그라미만 늘어놓으면
+/// 미색 잉크가 미색 종이에서 사라진다는 걸 눌러 보고서야 알게 됩니다.
+class _InkRow extends StatelessWidget {
+  const _InkRow({
+    required this.stock,
+    required this.trim,
+    required this.ink,
+    required this.onPick,
+  });
+
+  final ShareStock stock;
+  final ShareTrim trim;
+  final ShareInk ink;
+  final ValueChanged<ShareInk> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    // 소품이 '없음'이면 잉크는 아무것도 바꾸지 않습니다. 고르기는 그대로
+    // 열어 두되, 지금은 보이지 않는다는 것만 흐리게 알립니다.
+    final idle = trim == ShareTrim.none;
+
+    return Opacity(
+      opacity: idle ? 0.45 : 1.0,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        children: [
+          for (final i in ShareInk.values)
+            GestureDetector(
+              onTap: () => onPick(i),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      color: stock.paper,
+                      foregroundDecoration: BoxDecoration(
+                        border: Border.all(
+                          color: i == ink ? AppColors.ink : AppColors.line,
+                          width: i == ink ? 2 : 1,
+                        ),
+                      ),
+                      child: Center(
+                        // 실제 도장처럼 두 겹 테두리로 찍어 봅니다.
+                        child: Container(
+                          width: 22,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: i.on(stock).withValues(alpha: 0.88),
+                              width: 1.4,
+                            ),
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 13,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color:
+                                  i.on(stock).withValues(alpha: 0.88),
+                                  width: 0.8,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _SwatchLabel(i.label, active: i == ink),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
