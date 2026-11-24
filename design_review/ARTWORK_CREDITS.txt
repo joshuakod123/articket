@@ -1,0 +1,21 @@
+ARTICKET 디자인 검토용 작품 이미지 출처
+
+Vincent van Gogh — Wheat Field with Cypresses (1889)
+Metropolitan Museum of Art object 436535, public-domain artwork.
+https://www.metmuseum.org/art/collection/search/436535
+Wikimedia Commons reproduction:
+https://commons.wikimedia.org/wiki/File:1889_van_Gogh_Wheatfield_with_cypresses_anagoria.JPG
+
+Paul Cézanne — Still Life with Apples and a Pot of Primroses (c.1890)
+Metropolitan Museum of Art object 435882, public-domain artwork.
+https://www.metmuseum.org/art/collection/search/435882
+Wikimedia Commons reproduction:
+https://commons.wikimedia.org/wiki/File:Still_Life_with_Apples_and_a_Pot_of_Primroses,_by_Paul_Cézanne.jpg
+
+Katsushika Hokusai — The Great Wave off Kanagawa (c.1830–32)
+Public-domain artwork.
+https://commons.wikimedia.org/wiki/File:The_Great_Wave_off_Kanagawa.jpg
+
+화면에 표시한 전시 제목·관람일·장소는 UI 검토용 예시입니다.
+리서치한 유료 UI 키트는 공개 미리보기의 구성 원리를 참고했습니다.
+그 템플릿의 원본 파일·코드·사진·브랜드는 복제하거나 포함하지 않았습니다.
