@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+
 import '../models/ticket_draft.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
@@ -70,7 +71,8 @@ class _RecordFormState extends State<RecordForm> {
         ),
         const SizedBox(height: 18),
         DropdownButtonFormField<String>(
-          value: ['미술', '미디어아트', '사진', '공예', '건축', '공연', '기타'].contains(d.genre)
+          initialValue:
+              ['미술', '미디어아트', '사진', '공예', '건축', '공연', '기타'].contains(d.genre)
               ? d.genre
               : '기타',
           decoration: const InputDecoration(labelText: '장르'),

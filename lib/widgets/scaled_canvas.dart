@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// **고정 설계 크기**로 한 번 그린 뒤, 통째로 확대/축소해 상자에 맞춥니다.
 ///

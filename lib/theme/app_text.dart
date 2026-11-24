@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Bundled fonts: every screen and exported card works on the first offline run.
 class AppText {
@@ -64,13 +64,12 @@ class AppText {
     double height = 1.3,
   }) => TextStyle(
     fontFamily: 'TicketMono',
-    fontFamilyFallback: const ['AppSans'],
     fontSize: size,
     fontWeight: weight,
     color: color,
     letterSpacing: spacing,
     height: height,
-  );
+  ).copyWith(fontFamilyFallback: const ['AppSans']);
   static TextStyle dymo({
     double size = 10,
     Color? color,

@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart' show clampDouble;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
@@ -112,10 +112,13 @@ class _PocketClipper extends CustomClipper<Path> {
 double _measure(String text, TextStyle style) {
   final tp = TextPainter(
     text: TextSpan(text: text, style: style),
-    textDirection: TextDirection.ltr,
     maxLines: 1,
-  )..layout();
-  return tp.width;
+  )
+    ..textDirection = TextDirection.ltr
+    ..layout();
+  final width = tp.width;
+  tp.dispose();
+  return width;
 }
 
 /// 인덱스 탭 위에 얹히는 이름표.

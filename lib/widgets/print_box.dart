@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 인쇄물(티켓 · 회원증)을 **절대 찌그러뜨리지 않고** 상자에 앉히는 스케일러.
 ///

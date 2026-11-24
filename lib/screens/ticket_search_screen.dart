@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../data/ticket_store.dart';
 import '../data/ticket_query.dart';
 import '../widgets/ticket_canvas.dart';

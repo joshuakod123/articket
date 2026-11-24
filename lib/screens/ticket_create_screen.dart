@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+
 import '../data/ticket_store.dart';
 import '../models/ticket.dart';
 import '../models/ticket_draft.dart';
@@ -121,7 +122,7 @@ class _TicketCreateScreenState extends State<TicketCreateScreen> {
           const SizedBox(height: 20),
           if (folders.isNotEmpty) ...[
             DropdownButtonFormField<String>(
-              value: draft.folderId ?? folders.first.id,
+              initialValue: draft.folderId ?? folders.first.id,
               decoration: const InputDecoration(labelText: '보관할 서류철'),
               items: folders
                   .map(

@@ -5,12 +5,44 @@
 
 ## 실행
 
-Flutter **3.32 이상**, Dart **3.8 이상**이 필요합니다. 검증 SDK는 Flutter 3.32.8 / Dart 3.8.1입니다.
+Flutter **3.50.1 stable / Dart 3.14.0**을 기준으로 합니다.
+공식 `material_ui` 패키지를 사용하므로 이전 Flutter 3.32 SDK로는 실행하지 않습니다.
+`.fvmrc`와 GitHub Actions도 Flutter 3.50.1로 맞춰 두었습니다.
 
 ```sh
 flutter pub get
 flutter run
 ```
+
+### Android Studio의 SDK 맞추기
+
+터미널에서 `flutter --version`이 3.50.1을 표시해도 IDE가 다른 SDK나 오래된 Dart 분석기를
+사용하면 `fontFamilyFallback`, `outline`, `textDirection` 같은 정상 API를 인식하지 못할 수 있습니다.
+
+1. **Settings → Languages & Frameworks → Flutter**에서 Flutter SDK 경로를 확인합니다.
+2. **Dart**의 SDK 경로는 같은 Flutter 폴더의 `bin/cache/dart-sdk`로 맞춥니다.
+3. **Settings → Plugins → Installed**에서 Flutter·Dart 플러그인의 업데이트를 적용하고 IDE를 재시작합니다.
+4. 터미널에서 `flutter pub get`과 `flutter analyze`를 실행해 IDE 오류와 비교합니다.
+
+프로젝트마다 SDK를 고정하려면 FVM을 사용할 수 있습니다. FVM이 설치된 상태에서:
+
+```sh
+fvm install
+fvm flutter pub get
+fvm flutter analyze
+fvm flutter test
+```
+
+이 경우 Android Studio의 Flutter SDK 경로는 프로젝트의 `.fvm/flutter_sdk`로 지정합니다.
+기존 `~/StudioProjects/articket` 프로젝트 경로는 유지합니다.
+
+### 네이티브 빌드 도구
+
+Flutter 3.50.1의 템플릿에 맞춰 Android Gradle Plugin 9.3.1, Gradle 9.5.0,
+Kotlin 2.4.20, Java 바이트코드 17을 사용합니다. Android Studio의 **Gradle JDK**는
+JDK 17 이상을 선택합니다. 기존 플러그인을 위해 Flutter의 AGP 9 마이그레이션과 동일하게
+`android.builtInKotlin=false`, `android.newDsl=false`를 지정했습니다.
+Android 최소 버전은 Flutter SDK의 기본값(API 24)을 따르며 iOS 최소 버전은 15.0입니다.
 
 모바일 iOS/Android가 주 대상입니다. 저장·인증은 기존 Supabase 프로젝트와 연결됩니다.
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`를 `--dart-define`으로 지정하면 기존 기본 접속값보다 우선합니다.

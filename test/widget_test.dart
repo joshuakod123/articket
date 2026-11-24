@@ -3,7 +3,7 @@
 // 아카이브 홈(파일 드로어)이 뜨고, 서류철을 열어 스크랩북까지 들어가는지,
 // 서류철을 새로 만들 수 있는지 확인합니다.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';

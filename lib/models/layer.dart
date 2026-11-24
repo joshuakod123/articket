@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 에디터 캔버스에 올라가는 요소의 종류.
 ///

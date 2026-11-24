@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 어떤 축이 눈금에 걸렸는지.
 enum SnapAxis { x, y, rotation, scale }

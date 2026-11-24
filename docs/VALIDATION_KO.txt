@@ -1,14 +1,26 @@
-ARTICKET 업데이트 검증 결과
+ARTICKET Flutter 3.50.1 호환 수정 검증
 
-Flutter 3.32.8 / Dart 3.8.1
+기준: main 11ad84a (UI 변경 PR #1 병합본)
+SDK: Flutter 3.50.1, framework ae9b586f34, Dart 3.14.0
+
+- flutter pub get: 성공
 - flutter analyze --no-pub: No issues found!
-- flutter test --dart-define=EXPORT_PREVIEWS=true: 24 tests passed
-- flutter build bundle --debug --no-pub: 성공 (exit code 0)
+- flutter test --no-pub: 25 tests passed
+- flutter build bundle --debug --no-pub: 성공
 - git diff --check: 통과
-- AndroidManifest.xml / iOS Info.plist 파싱: 통과
+- Android/iOS 설정을 Flutter 3.50.1 템플릿의 빌드 도구 요구사항에 맞춤
 
-이 자료의 화면 PNG는 실제 Flutter 테스트 렌더링입니다.
-스크린샷의 예시 기록은 테스트 전용이며 사용자 계정에 저장하지 않았습니다.
-Android APK / iOS IPA 빌드 및 실기기 인증·사진 권한·복구 링크·공유·기기 간 동기화는 별도 확인이 필요합니다.
-서버 설정 및 실행 방법은 articket/README.md를 확인하세요.
-GitHub 원본 브랜치와 서버는 변경하거나 배포하지 않았습니다.
+주요 수정
+- 공식 material_ui 패키지로 이전하고 드롭다운의 initialValue API 사용
+- 글꼴 폴백, 테두리 색상, TextPainter 설정을 호환되는 방식으로 적용
+- 플랫폼 기본 화면 전환 사용
+- 6종 서류철 글꼴과 7종 도장 렌더링 회귀 테스트 추가
+- .fvmrc와 CI의 SDK를 Flutter 3.50.1로 고정
+
+IDE에서만 오류가 남으면 README의 Android Studio SDK·Dart 플러그인 설정을 확인하세요.
+원본 코드도 동일 SDK의 CLI로 비교했습니다. 일부 항목은 IDE 분석기에서만 추가로
+발생했으며 RegExp 사용을 경고하는 항목은 실제 Dart 3.14 분석기에서 재현되지 않았습니다.
+소스의 오류나 사용 중단 안내를 숨기는 ignore 설정은 추가하지 않았습니다.
+
+Android 네이티브 APK 빌드는 GitHub Actions의 android-debug 작업으로 검증합니다.
+iOS 네이티브 빌드와 실기기 인증·사진 권한·공유는 별도 실기기 확인이 필요합니다.
