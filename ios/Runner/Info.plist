@@ -10,6 +10,8 @@
     <string>티켓 포스터로 쓸 사진을 고릅니다.</string>
     <key>NSCameraUsageDescription</key>
     <string>티켓 포스터로 쓸 사진을 촬영합니다.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>기기의 기울기에 맞춰 티켓의 홀로그램 효과를 보여줍니다.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

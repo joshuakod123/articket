@@ -44,6 +44,18 @@ JDK 17 이상을 선택합니다. 기존 플러그인을 위해 Flutter의 AGP 9
 `android.builtInKotlin=false`, `android.newDsl=false`를 지정했습니다.
 Android 최소 버전은 Flutter SDK의 기본값(API 24)을 따르며 iOS 최소 버전은 15.0입니다.
 
+### iOS 실행 로그와 설정 창
+
+- 이름 수정 창은 자체 State에서 입력 컨트롤러를 관리합니다. 창이 닫히는 애니메이션이
+  끝나기 전에 컨트롤러를 해제하던 `TextEditingController was used after being disposed`
+  오류를 수정했으며, 키보드가 열린 작은 화면에서는 창 내용이 스크롤됩니다.
+- `sensors_plus` 7.1.1과 `app_links` 7.2.2를 사용해 Swift Package Manager 및
+  UIScene 호환성을 갱신했습니다. 센서 플러그인에서 요구하는 `NSMotionUsageDescription`도 등록했습니다.
+- `Reported frame time is older than the last one; clamping`은 Flutter 엔진의
+  프레임 타임스탬프 보정 로그입니다. 이 앱의 수정으로 엔진 로그 자체가 없어지는 것은 아닙니다.
+  실제 종료가 발생하면 뒤에 나오는 Dart 예외나 iOS 크래시 로그를 함께 확인합니다.
+- CI는 분석·테스트, Android APK, iOS 시뮬레이터 빌드를 각각 실행합니다.
+
 모바일 iOS/Android가 주 대상입니다. 저장·인증은 기존 Supabase 프로젝트와 연결됩니다.
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`를 `--dart-define`으로 지정하면 기존 기본 접속값보다 우선합니다.
 폰트와 로고는 번들에 포함되어 첫 오프라인 실행에도 표시됩니다.
