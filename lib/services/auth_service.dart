@@ -68,6 +68,7 @@ class AuthService extends ChangeNotifier {
   AuthStage get stage => _stage;
 
   Viewer? _viewer;
+  bool needsPasswordReset = false;
 
   /// 지금 로그인한 사람. 로그아웃 상태면 null.
   Viewer? get viewer => _viewer;
@@ -89,6 +90,10 @@ class AuthService extends ChangeNotifier {
 
     // 토큰 만료 · 비밀번호 변경 · 다른 곳에서의 로그아웃을 여기서 받습니다.
     _sub ??= sb.auth.onAuthStateChange.listen((s) {
+      if (s.event == AuthChangeEvent.passwordRecovery && s.session != null) {
+        unawaited(_preparePasswordRecovery(s.session!.user));
+        return;
+      }
       if (s.session == null && _stage == AuthStage.signedIn) {
         _viewer = null;
         _stage = AuthStage.signedOut;
@@ -106,6 +111,9 @@ class AuthService extends ChangeNotifier {
     // 캐시된 프로필로 **먼저** 화면을 띄웁니다. 네트워크를 기다리지 않습니다.
     // 서랍이 열리는 데 서버가 끼면 이 앱은 팔던 것과 다른 물건이 됩니다.
     final cached = await _local.readMap(LocalStore.kAccount);
+    if (cached != null && cached['id'] != user.id) {
+      await TicketStore.instance.wipe();
+    }
     _viewer = (cached != null && cached['id'] == user.id)
         ? Viewer.fromJson(cached)
         : Viewer.fromUser(user);
@@ -146,8 +154,6 @@ class AuthService extends ChangeNotifier {
         return AuthResult.fail(AuthFailure.needsEmailConfirm);
       }
 
-      await _adopt(res.user!, fallbackName: name.trim());
-
       // ── 새 계정은 **빈 서랍**에서 시작합니다 ──
       //
       // 예전에는 여기서 `adoptLocalDataThenSync()` 를 불러, 이 기기에 남아
@@ -171,7 +177,7 @@ class AuthService extends ChangeNotifier {
 
       // 새 사람이니 안내도 처음부터.
       await GuideService.instance.reset();
-
+      await _adopt(res.user!, fallbackName: name.trim());
       unawaited(SyncService.instance.syncNow(full: true));
       return AuthResult.ok();
     } on AuthException catch (err) {
@@ -191,23 +197,26 @@ class AuthService extends ChangeNotifier {
     }
 
     try {
-      final res = await sb.auth.signInWithPassword(email: e, password: password);
+      final res = await sb.auth.signInWithPassword(
+        email: e,
+        password: password,
+      );
       final user = res.user;
       if (user == null) return AuthResult.fail(AuthFailure.wrongCredentials);
 
       // **다른 계정으로 갈아탄 경우** 이 기기의 로컬 기록은 남의 것입니다.
       // 지우고 서버에서 새로 받습니다. 안 지우면 A 의 티켓이 B 의 서랍에 섞입니다.
       final previous = await _local.readMap(LocalStore.kAccount);
-      final switched = previous != null &&
+      final switched =
+          previous != null &&
           previous['id'] is String &&
           previous['id'] != user.id;
-
-      await _adopt(user);
 
       if (switched) {
         await TicketStore.instance.wipe(); // 안에서 SyncService.reset() 먼저
         await TicketStore.instance.load();
       }
+      await _adopt(user);
       unawaited(SyncService.instance.syncNow(full: true));
       return AuthResult.ok();
     } on AuthException catch (_) {
@@ -225,9 +234,9 @@ class AuthService extends ChangeNotifier {
   Future<void> signOut() async {
     if (SupabaseEnv.isConfigured) {
       try {
-        await SyncService.instance
-            .pushPending()
-            .timeout(const Duration(seconds: 8));
+        await SyncService.instance.pushPending().timeout(
+          const Duration(seconds: 8),
+        );
       } catch (_) {}
       try {
         await sb.auth.signOut();
@@ -239,6 +248,7 @@ class AuthService extends ChangeNotifier {
       }
     }
     await _local.delete(LocalStore.kSession);
+    needsPasswordReset = false;
     _viewer = null;
     _stage = AuthStage.signedOut;
     notifyListeners();
@@ -270,6 +280,63 @@ class AuthService extends ChangeNotifier {
       await sb.from('profiles').update({'name': n}).eq('id', v.id);
       await sb.auth.updateUser(UserAttributes(data: {'name': n}));
     } catch (_) {}
+  }
+
+  Future<void> _preparePasswordRecovery(User user) async {
+    needsPasswordReset = true;
+    _stage = AuthStage.unknown;
+    notifyListeners();
+    try {
+      final previous = await _local.readMap(LocalStore.kAccount);
+      if (previous != null && previous['id'] != user.id) {
+        await TicketStore.instance.wipe();
+      }
+      if (sb.auth.currentUser?.id != user.id) {
+        throw StateError('Recovery session changed');
+      }
+      await _adopt(user);
+    } catch (_) {
+      needsPasswordReset = false;
+      _viewer = null;
+      _stage = AuthStage.signedOut;
+      notifyListeners();
+    }
+  }
+
+  Future<AuthResult> requestPasswordReset(String email) async {
+    if (!SupabaseEnv.isConfigured) {
+      return AuthResult.fail(AuthFailure.notConfigured);
+    }
+    final e = email.trim().toLowerCase();
+    if (!_looksLikeEmail(e)) return AuthResult.fail(AuthFailure.badEmail);
+    try {
+      await sb.auth.resetPasswordForEmail(
+        e,
+        redirectTo: const String.fromEnvironment(
+          'AUTH_REDIRECT_URL',
+          defaultValue: 'articket://auth-callback',
+        ),
+      );
+      return AuthResult.ok();
+    } catch (err) {
+      return AuthResult.fail(_mapNetworkError(err));
+    }
+  }
+
+  Future<AuthResult> finishPasswordReset(String password) async {
+    if (!needsPasswordReset) {
+      return AuthResult.fail(AuthFailure.wrongCredentials);
+    }
+    if (password.length < 8) return AuthResult.fail(AuthFailure.weakPassword);
+    try {
+      await sb.auth.updateUser(UserAttributes(password: password));
+      needsPasswordReset = false;
+      notifyListeners();
+      unawaited(SyncService.instance.syncNow(full: true));
+      return AuthResult.ok();
+    } catch (err) {
+      return AuthResult.fail(_mapNetworkError(err));
+    }
   }
 
   Future<AuthResult> changePassword({
@@ -322,7 +389,8 @@ class AuthService extends ChangeNotifier {
       if (res.status != 200) return AuthResult.fail(AuthFailure.serverError);
     } catch (err) {
       return AuthResult.fail(
-          _mapNetworkError(err, fallback: AuthFailure.serverError));
+        _mapNetworkError(err, fallback: AuthFailure.serverError),
+      );
     }
 
     // 3. 성공을 받은 뒤에야 기기를 비웁니다.
@@ -332,6 +400,7 @@ class AuthService extends ChangeNotifier {
       await sb.auth.signOut(scope: SignOutScope.local);
     } catch (_) {}
 
+    needsPasswordReset = false;
     _viewer = null;
     _stage = AuthStage.signedOut;
     notifyListeners();
@@ -381,14 +450,17 @@ class AuthService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> _cache(Viewer v) => _local.write(LocalStore.kAccount, v.toJson());
+  Future<void> _cache(Viewer v) =>
+      _local.write(LocalStore.kAccount, v.toJson());
 
   /// 비밀번호를 다시 받아 확인합니다. 같은 계정이라 세션은 그대로입니다.
   Future<bool> _reauthenticate(String email, String password) async {
     if (password.isEmpty) return false;
     try {
-      final res =
-      await sb.auth.signInWithPassword(email: email, password: password);
+      final res = await sb.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
       return res.user != null;
     } catch (_) {
       return false;
@@ -468,8 +540,9 @@ class Viewer {
   bool get isPro => plan == 'pro';
 
   /// `M-2025-0006`. 서버 번호가 아직 없으면 자리표시를 냅니다.
-  String get memberSerialText =>
-      memberNo > 0 ? memberSerial(since: memberYear, no: memberNo) : 'M-0000-0000';
+  String get memberSerialText => memberNo > 0
+      ? memberSerial(since: memberYear, no: memberNo)
+      : 'M-0000-0000';
 
   Viewer copyWith({
     String? name,
@@ -477,16 +550,15 @@ class Viewer {
     int? memberYear,
     int? memberNo,
     String? plan,
-  }) =>
-      Viewer(
-        id: id,
-        email: email,
-        name: name ?? this.name,
-        joinedAt: joinedAt ?? this.joinedAt,
-        memberYear: memberYear ?? this.memberYear,
-        memberNo: memberNo ?? this.memberNo,
-        plan: plan ?? this.plan,
-      );
+  }) => Viewer(
+    id: id,
+    email: email,
+    name: name ?? this.name,
+    joinedAt: joinedAt ?? this.joinedAt,
+    memberYear: memberYear ?? this.memberYear,
+    memberNo: memberNo ?? this.memberNo,
+    plan: plan ?? this.plan,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -503,7 +575,7 @@ class Viewer {
     email: j['email'] as String? ?? '',
     name: j['name'] as String? ?? '이름 없음',
     joinedAt:
-    DateTime.tryParse(j['joinedAt'] as String? ?? '') ?? DateTime.now(),
+        DateTime.tryParse(j['joinedAt'] as String? ?? '') ?? DateTime.now(),
     memberYear: j['memberYear'] as int? ?? 0,
     memberNo: j['memberNo'] as int? ?? 0,
     plan: j['plan'] as String? ?? 'basic',
@@ -514,7 +586,9 @@ class Viewer {
     return Viewer(
       id: u.id,
       email: u.email ?? '',
-      name: (meta != null && meta.isNotEmpty) ? meta : (fallbackName ?? '이름 없음'),
+      name: (meta != null && meta.isNotEmpty)
+          ? meta
+          : (fallbackName ?? '이름 없음'),
       joinedAt: DateTime.tryParse(u.createdAt) ?? DateTime.now(),
     );
   }

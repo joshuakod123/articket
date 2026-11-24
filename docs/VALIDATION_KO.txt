@@ -1,0 +1,14 @@
+ARTICKET 업데이트 검증 결과
+
+Flutter 3.32.8 / Dart 3.8.1
+- flutter analyze --no-pub: No issues found!
+- flutter test --dart-define=EXPORT_PREVIEWS=true: 24 tests passed
+- flutter build bundle --debug --no-pub: 성공 (exit code 0)
+- git diff --check: 통과
+- AndroidManifest.xml / iOS Info.plist 파싱: 통과
+
+이 자료의 화면 PNG는 실제 Flutter 테스트 렌더링입니다.
+스크린샷의 예시 기록은 테스트 전용이며 사용자 계정에 저장하지 않았습니다.
+Android APK / iOS IPA 빌드 및 실기기 인증·사진 권한·복구 링크·공유·기기 간 동기화는 별도 확인이 필요합니다.
+서버 설정 및 실행 방법은 articket/README.md를 확인하세요.
+GitHub 원본 브랜치와 서버는 변경하거나 배포하지 않았습니다.

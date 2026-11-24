@@ -23,6 +23,7 @@ class ScrapLayer {
     this.color = 0xFFE8E2D4,
     this.fontSize = 16,
     this.font = 'hand',
+    this.photoKey,
   });
 
   final String id;
@@ -32,6 +33,9 @@ class ScrapLayer {
   /// tape → 무늬 이름(`plain`·`stripe`…) / photo → 파일 경로
   /// stamp → `모양|윗글자|가운뎃글자|아랫글자` ([StampSpec] 참고)
   String content;
+
+  /// Private cloud object key; content holds only this device's cached path.
+  String? photoKey;
 
   double dx;
   double dy;
@@ -53,6 +57,7 @@ class ScrapLayer {
     id: id ?? this.id,
     kind: kind,
     content: content ?? this.content,
+    photoKey: photoKey,
     dx: dx,
     dy: dy,
     scale: scale,
@@ -73,15 +78,17 @@ class ScrapLayer {
     'color': color,
     'fontSize': fontSize,
     'font': font,
+    'photoKey': photoKey,
   };
 
   factory ScrapLayer.fromMap(Map<String, dynamic> m) => ScrapLayer(
     id: m['id'] as String,
     kind: LayerKind.values.firstWhere(
-          (e) => e.name == m['kind'],
+      (e) => e.name == m['kind'],
       orElse: () => LayerKind.sticker,
     ),
-    content: m['content'] as String,
+    content: m['content'] as String? ?? '',
+    photoKey: m['photoKey'] as String?,
     dx: (m['dx'] as num).toDouble(),
     dy: (m['dy'] as num).toDouble(),
     scale: (m['scale'] as num).toDouble(),

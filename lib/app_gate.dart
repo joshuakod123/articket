@@ -5,6 +5,8 @@ import 'data/ticket_store.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/root_shell.dart';
+import 'screens/onboarding/welcome_tour.dart';
+import 'screens/auth/password_reset_screen.dart';
 import 'services/auth_service.dart';
 import 'services/guide_service.dart';
 import 'theme/app_colors.dart';
@@ -49,7 +51,7 @@ class AppGate extends StatefulWidget {
 }
 
 /// 지금 무엇을 보여줄지. `AuthStage`와 부팅 상태를 합친 값입니다.
-enum _Gate { splash, auth, shell }
+enum _Gate { splash, welcome, auth, recovery, shell }
 
 class _AppGateState extends State<AppGate> {
   final _auth = AuthService.instance;
@@ -114,20 +116,25 @@ class _AppGateState extends State<AppGate> {
 
   _Gate get _gate {
     if (!_held || _auth.stage == AuthStage.unknown) return _Gate.splash;
-    if (_auth.stage == AuthStage.signedOut) return _Gate.auth;
+    if (_auth.needsPasswordReset) return _Gate.recovery;
+    if (_auth.stage == AuthStage.signedOut) {
+      return GuideService.instance.introSeen ? _Gate.auth : _Gate.welcome;
+    }
     return _Gate.shell;
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _auth,
+      listenable: Listenable.merge([_auth, GuideService.instance]),
       builder: (context, _) {
         // `_GatePage`도 자식 화면도 const 라, 이름 변경 같은 다른 알림으로
         // 다시 그려도 Navigator 입장에서는 **같은 페이지**입니다.
         // 라우트가 새로 지어지지 않습니다.
         final Page<void> page = switch (_gate) {
           _Gate.splash => _GatePage.splash,
+          _Gate.welcome => _GatePage.welcome,
+          _Gate.recovery => _GatePage.recovery,
           _Gate.auth => _GatePage.auth,
           _Gate.shell => _GatePage.shell,
         };
@@ -173,6 +180,14 @@ class _GatePage extends Page<void> {
   static const splash = _GatePage(
     key: ValueKey('splash'),
     child: SplashScreen(),
+  );
+  static const welcome = _GatePage(
+    key: ValueKey('welcome'),
+    child: WelcomeTour(),
+  );
+  static const recovery = _GatePage(
+    key: ValueKey('recovery'),
+    child: PasswordResetScreen(recovering: true),
   );
   static const auth = _GatePage(key: ValueKey('auth'), child: AuthScreen());
   static const shell = _GatePage(key: ValueKey('shell'), child: RootShell());

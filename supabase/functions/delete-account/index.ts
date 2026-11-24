@@ -54,22 +54,21 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // 2. 스토리지 먼저. cascade 가 닿지 않는 유일한 곳입니다.
-  //    유저를 먼저 지우면 이 사진들은 주인 없이 영원히 남고, 지울 방법도
-  //    없어집니다(경로의 uid 에 해당하는 계정이 더는 없으므로).
+  // Remove every page, always reading from offset zero after each deletion.
+  // Do not claim deletion succeeded while private photos remain in storage.
   try {
-    const { data: files } = await admin.storage
-      .from('posters')
-      .list(user.id, { limit: 1000 });
-    if (files?.length) {
-      await admin.storage
-        .from('posters')
+    while (true) {
+      const { data: files, error: listError } = await admin.storage
+        .from('posters').list(user.id, { limit: 100 });
+      if (listError) throw listError;
+      if (!files?.length) break;
+      const { error: removeError } = await admin.storage.from('posters')
         .remove(files.map((f) => `${user.id}/${f.name}`));
+      if (removeError) throw removeError;
     }
   } catch (e) {
-    // 사진 정리 실패로 탈퇴를 막지 않습니다. 심사에서 문제가 되는 건
-    // "계정이 안 지워지는 것"이지 고아 파일이 아닙니다.
     console.error('poster cleanup failed', user.id, e);
+    return json({ error: 'photo_cleanup_failed' }, 503);
   }
 
   // 3. 계정. 나머지 테이블이 cascade 로 따라갑니다.

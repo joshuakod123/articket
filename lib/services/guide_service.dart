@@ -44,6 +44,13 @@ class GuideService extends ChangeNotifier {
   final Map<String, bool> _flags = {};
 
   bool _loaded = false;
+  bool _introSeen = false;
+  bool get introSeen => _introSeen;
+  Future<void> markIntroSeen() async {
+    _introSeen = true;
+    await _local.writeFlag(LocalStore.kIntro, true);
+    notifyListeners();
+  }
 
   bool get isLoaded => _loaded;
 
@@ -51,6 +58,7 @@ class GuideService extends ChangeNotifier {
   Future<void> load() async {
     if (_loaded) return;
     try {
+      _introSeen = await _local.readFlag(LocalStore.kIntro);
       final j = await _local.readMap(LocalStore.kGuide);
       j?.forEach((k, v) {
         if (v is bool) _flags[k] = v;

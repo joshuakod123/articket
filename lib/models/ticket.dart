@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/serial.dart';
 import '../theme/folder_style.dart';
 import 'layer.dart';
+import '../theme/ticket_design.dart';
 
 /// 티켓 실루엣 프리셋.
 ///
@@ -17,12 +18,12 @@ enum TicketFrame {
   minimal('미니멀', '절취선 없는 카드', 0.66, 80, false);
 
   const TicketFrame(
-      this.label,
-      this.hint,
-      this.aspect,
-      this.flexPoster,
-      this.horizontal,
-      );
+    this.label,
+    this.hint,
+    this.aspect,
+    this.flexPoster,
+    this.horizontal,
+  );
 
   final String label;
   final String hint;
@@ -33,14 +34,14 @@ enum TicketFrame {
   /// 절취선을 그릴지. 미니멀·우표·필름은 없습니다.
   bool get hasPerforation =>
       this == TicketFrame.classic ||
-          this == TicketFrame.stub ||
-          this == TicketFrame.receipt;
+      this == TicketFrame.stub ||
+      this == TicketFrame.receipt;
 
   /// 우표는 흰 여백 안에 포스터가 액자처럼 들어갑니다.
   bool get matted => this == TicketFrame.stamp;
 
   static TicketFrame parse(String? name) => TicketFrame.values.firstWhere(
-        (f) => f.name == name,
+    (f) => f.name == name,
     orElse: () => TicketFrame.classic,
   );
 }
@@ -115,14 +116,16 @@ class Ticket {
     this.posterPath,
     this.posterKey,
     this.isPublic = false,
+    this.design = TicketDesign.legacy,
+    this.isFavorite = false,
     this.px,
     this.py,
     this.pscale = 1.0,
     this.protation = 0.0,
     List<Color>? posterTint,
     List<ScrapLayer>? layers,
-  })  : posterTint = posterTint ?? PosterPalette.presets.first.colors,
-        layers = layers ?? [];
+  }) : posterTint = posterTint ?? PosterPalette.presets.first.colors,
+       layers = layers ?? [];
 
   final String id;
   String folderId;
@@ -183,6 +186,8 @@ class Ticket {
   /// **기본값은 false 여야 합니다.** 이 앱은 "혼자 소장하는 서랍"으로 팔리고
   /// 있고, 기본 공개는 그 약속을 깹니다.
   bool isPublic;
+  TicketDesign design;
+  bool isFavorite;
 
   /// 사진이 없을 때 쓰는 그라디언트.
   List<Color> posterTint;
@@ -254,6 +259,8 @@ class Ticket {
     'pscale': pscale,
     'protation': protation,
     'layers': ScrapLayer.encodeList(layers),
+    'design': design.name,
+    'isFavorite': isFavorite,
   };
 
   factory Ticket.fromJson(Map<String, dynamic> j) => Ticket(
@@ -263,10 +270,12 @@ class Ticket {
     venue: j['venue'] as String? ?? '',
     visitedAt: DateTime.parse(j['visitedAt'] as String),
     // 구버전(번호를 문자열로만 저장)에서 올라온 데이터도 받아 냅니다.
-    issuedYear: (j['issuedYear'] as int?) ??
+    issuedYear:
+        (j['issuedYear'] as int?) ??
         parseTicketSerial(j['serial'] as String?)?.year ??
         0,
-    issuedSeq: (j['issuedSeq'] as int?) ??
+    issuedSeq:
+        (j['issuedSeq'] as int?) ??
         parseTicketSerial(j['serial'] as String?)?.seq ??
         0,
     genre: j['genre'] as String? ?? '미술',
@@ -279,12 +288,15 @@ class Ticket {
     posterPath: j['posterPath'] as String?,
     posterKey: j['posterKey'] as String?,
     isPublic: j['isPublic'] as bool? ?? false,
+    design: TicketDesign.parse(j['design'] as String?),
+    isFavorite: j['isFavorite'] as bool? ?? false,
     px: (j['px'] as num?)?.toDouble(),
     py: (j['py'] as num?)?.toDouble(),
     pscale: (j['pscale'] as num?)?.toDouble() ?? 1.0,
     protation: (j['protation'] as num?)?.toDouble() ?? 0.0,
-    posterTint:
-    (j['posterTint'] as List?)?.map((v) => Color(v as int)).toList(),
+    posterTint: (j['posterTint'] as List?)
+        ?.map((v) => Color(v as int))
+        .toList(),
     layers: j['layers'] == null
         ? null
         : ScrapLayer.decodeList(j['layers'] as String),

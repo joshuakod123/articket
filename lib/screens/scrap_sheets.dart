@@ -69,9 +69,30 @@ class ScrapPalette {
 
   /// 이모지 스티커. 벡터로 안 만든 것들만 남겼습니다.
   static const emoji = <String>[
-    '🎟️', '🖼️', '✂️', '📎', '📌', '🕯️', '🗝️', '🎨',
-    '☕', '🌙', '⭐', '🧾', '📷', '🪞', '🍃', '✦',
-    '🌷', '🍷', '🎧', '📖', '🚃', '🗿', '🧦', '🫖',
+    '🎟️',
+    '🖼️',
+    '✂️',
+    '📎',
+    '📌',
+    '🕯️',
+    '🗝️',
+    '🎨',
+    '☕',
+    '🌙',
+    '⭐',
+    '🧾',
+    '📷',
+    '🪞',
+    '🍃',
+    '✦',
+    '🌷',
+    '🍷',
+    '🎧',
+    '📖',
+    '🚃',
+    '🗿',
+    '🧦',
+    '🫖',
   ];
 }
 
@@ -138,10 +159,7 @@ class _SheetShell extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (preview != null) ...[
-                  const SizedBox(height: 16),
-                  preview!,
-                ],
+                if (preview != null) ...[const SizedBox(height: 16), preview!],
                 const SizedBox(height: 14),
                 Flexible(child: child),
                 if (action != null) ...[
@@ -164,7 +182,7 @@ class _SheetShell extends StatelessWidget {
 Widget _primaryButton(String label, VoidCallback onTap) => FilledButton(
   onPressed: onTap,
   style: FilledButton.styleFrom(
-    backgroundColor: AppColors.oxblood,
+    backgroundColor: AppColors.accent,
     foregroundColor: AppColors.stockLight,
     shape: const RoundedRectangleBorder(),
     padding: const EdgeInsets.symmetric(vertical: 15),
@@ -217,13 +235,15 @@ class _ColorRail extends StatelessWidget {
                 ),
               ),
               child: on
-                  ? Icon(Icons.check,
-                  size: 15,
-                  color:
-                  ThemeData.estimateBrightnessForColor(c) ==
-                      Brightness.dark
-                      ? AppColors.stockLight
-                      : AppColors.ink)
+                  ? Icon(
+                      Icons.check,
+                      size: 15,
+                      color:
+                          ThemeData.estimateBrightnessForColor(c) ==
+                              Brightness.dark
+                          ? AppColors.stockLight
+                          : AppColors.ink,
+                    )
                   : null,
             ),
           );
@@ -244,7 +264,10 @@ class _RailTitle extends StatelessWidget {
     child: Text(
       text,
       style: AppText.ui(
-          size: 12, weight: FontWeight.w600, color: AppColors.inkSoft),
+        size: 12,
+        weight: FontWeight.w600,
+        color: AppColors.inkSoft,
+      ),
     ),
   );
 }
@@ -261,8 +284,10 @@ class StickerChoice {
 }
 
 /// 스티커 고르기. 직접 그린 것 16종 + 이모지 24종, 색은 16가지.
-Future<StickerChoice?> pickSticker(BuildContext context,
-    {Color initial = AppColors.oxblood}) {
+Future<StickerChoice?> pickSticker(
+  BuildContext context, {
+  Color initial = AppColors.accent,
+}) {
   return showModalBottomSheet<StickerChoice>(
     context: context,
     isScrollControlled: true,
@@ -307,12 +332,15 @@ class _StickerSheetState extends State<_StickerSheet>
             const SizedBox(height: 6),
             TabBar(
               controller: _tabs,
-              indicatorColor: AppColors.oxblood,
+              indicatorColor: AppColors.accent,
               indicatorSize: TabBarIndicatorSize.label,
               labelColor: AppColors.ink,
               unselectedLabelColor: AppColors.inkSoft,
               labelStyle: AppText.eyebrow(),
-              tabs: const [Tab(text: 'DRAWN'), Tab(text: 'EMOJI')],
+              tabs: const [
+                Tab(text: 'DRAWN'),
+                Tab(text: 'EMOJI'),
+              ],
             ),
             Expanded(
               child: TabBarView(
@@ -332,7 +360,7 @@ class _StickerSheetState extends State<_StickerSheet>
         child: Container(
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.stock,
+            color: AppColors.surface,
             border: Border.all(color: AppColors.line),
           ),
           child: child,
@@ -350,8 +378,7 @@ class _StickerSheetState extends State<_StickerSheet>
     itemBuilder: (context, i) {
       final art = StickerArt.values[i];
       return _tile(
-        onTap: () =>
-            Navigator.pop(context, StickerChoice(art.content, _color)),
+        onTap: () => Navigator.pop(context, StickerChoice(art.content, _color)),
         child: StickerPreview(art: art, color: _color, size: 34),
       );
     },
@@ -394,22 +421,18 @@ class TextChoice {
 /// 무엇이 어떻게 찍히는지 넣어보기 전엔 알 수 없었습니다.
 /// 이제 위쪽에 **실제로 찍힐 모습이 그대로** 떠 있습니다.
 Future<TextChoice?> editScrapText(
-    BuildContext context, {
-      String initial = '',
-      FolderFont font = FolderFont.hand,
-      Color color = AppColors.oxblood,
-      double size = 22,
-    }) {
+  BuildContext context, {
+  String initial = '',
+  FolderFont font = FolderFont.hand,
+  Color color = AppColors.accent,
+  double size = 22,
+}) {
   return showModalBottomSheet<TextChoice>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _TextSheet(
-      initial: initial,
-      font: font,
-      color: color,
-      size: size,
-    ),
+    builder: (_) =>
+        _TextSheet(initial: initial, font: font, color: color, size: size),
   );
 }
 
@@ -470,7 +493,7 @@ class _TextSheetState extends State<_TextSheet> {
           margin: const EdgeInsets.symmetric(horizontal: 20),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.stock,
+            color: AppColors.surface,
             border: Border.all(color: AppColors.line),
           ),
           child: Padding(
@@ -534,9 +557,10 @@ class _TextSheetState extends State<_TextSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: on ? AppColors.ink : AppColors.stock,
+                        color: on ? AppColors.ink : AppColors.surface,
                         border: Border.all(
-                            color: on ? AppColors.ink : AppColors.line),
+                          color: on ? AppColors.ink : AppColors.line,
+                        ),
                       ),
                       child: Text(
                         f.label,
@@ -599,10 +623,10 @@ class TapeChoice {
 
 /// 테이프 고르기. 무늬 6종 · 색 12가지.
 Future<TapeChoice?> pickTape(
-    BuildContext context, {
-      TapePattern pattern = TapePattern.plain,
-      Color color = const Color(0x998C7134),
-    }) {
+  BuildContext context, {
+  TapePattern pattern = TapePattern.plain,
+  Color color = const Color(0x998C7134),
+}) {
   return showModalBottomSheet<TapeChoice>(
     context: context,
     isScrollControlled: true,
@@ -636,7 +660,7 @@ class _TapeSheetState extends State<_TapeSheet> {
           margin: const EdgeInsets.symmetric(horizontal: 20),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.stock,
+            color: AppColors.surface,
             border: Border.all(color: AppColors.line),
           ),
           child: Transform.rotate(
@@ -651,7 +675,7 @@ class _TapeSheetState extends State<_TapeSheet> {
         ),
         action: _primaryButton(
           '붙이기',
-              () => Navigator.pop(context, TapeChoice(_pattern, _color)),
+          () => Navigator.pop(context, TapeChoice(_pattern, _color)),
         ),
         child: ListView(
           padding: EdgeInsets.zero,
@@ -743,11 +767,11 @@ class StampChoice {
 /// 미리 만든 문구를 고르고 끝낼 수도 있고, 글자를 직접 파 넣을 수도 있습니다.
 /// 위쪽 미리보기는 **실제로 찍힐 모습 그대로**입니다(잉크 벗겨진 자국 포함).
 Future<StampChoice?> pickStamp(
-    BuildContext context, {
-      StampSpec? initial,
-      Color color = const Color(0xE6A5321F),
-      double size = 92,
-    }) {
+  BuildContext context, {
+  StampSpec? initial,
+  Color color = const Color(0xE6A5321F),
+  double size = 92,
+}) {
   return showModalBottomSheet<StampChoice>(
     context: context,
     isScrollControlled: true,
@@ -772,7 +796,8 @@ class _StampSheet extends StatefulWidget {
 }
 
 class _StampSheetState extends State<_StampSheet> {
-  late StampSpec _spec = widget.initial ?? StampSpec.presets(DateTime.now()).first;
+  late StampSpec _spec =
+      widget.initial ?? StampSpec.presets(DateTime.now()).first;
   late Color _color = widget.color;
   late double _size = widget.size;
 
@@ -830,7 +855,7 @@ class _StampSheetState extends State<_StampSheet> {
           margin: const EdgeInsets.symmetric(horizontal: 20),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.stock,
+            color: AppColors.surface,
             border: Border.all(color: AppColors.line),
           ),
           child: Transform.rotate(
@@ -839,18 +864,15 @@ class _StampSheetState extends State<_StampSheet> {
             child: StampMark(spec: _spec, color: _color, size: 100, seed: 7),
           ),
         ),
-        action: _primaryButton(
-          widget.initial == null ? '찍기' : '고치기',
-              () {
-            if (_spec.center.trim().isEmpty &&
-                _spec.top.trim().isEmpty &&
-                _spec.bottom.trim().isEmpty) {
-              Navigator.pop(context);
-              return;
-            }
-            Navigator.pop(context, StampChoice(_spec, _color, _size));
-          },
-        ),
+        action: _primaryButton(widget.initial == null ? '찍기' : '고치기', () {
+          if (_spec.center.trim().isEmpty &&
+              _spec.top.trim().isEmpty &&
+              _spec.bottom.trim().isEmpty) {
+            Navigator.pop(context);
+            return;
+          }
+          Navigator.pop(context, StampChoice(_spec, _color, _size));
+        }),
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -872,7 +894,7 @@ class _StampSheetState extends State<_StampSheet> {
                       alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.stock,
+                        color: AppColors.surface,
                         border: Border.all(
                           color: on ? AppColors.ink : AppColors.line,
                           width: on ? 1.6 : 1,
@@ -928,7 +950,11 @@ class _StampSheetState extends State<_StampSheet> {
                             child: FittedBox(
                               child: StampMark(
                                 spec: StampSpec(
-                                    shape: shape, top: '', center: '', bottom: ''),
+                                  shape: shape,
+                                  top: '',
+                                  center: '',
+                                  bottom: '',
+                                ),
                                 color: AppColors.ink,
                                 size: 34,
                                 worn: false,
@@ -959,20 +985,25 @@ class _StampSheetState extends State<_StampSheet> {
               padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
               child: Row(
                 children: [
-                  Text('글자 직접 넣기',
-                      style: AppText.ui(
-                          size: 12,
-                          weight: FontWeight.w600,
-                          color: AppColors.inkSoft)),
+                  Text(
+                    '글자 직접 넣기',
+                    style: AppText.ui(
+                      size: 12,
+                      weight: FontWeight.w600,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
                   const Spacer(),
                   TextButton(
                     onPressed: () => setState(() => _carving = !_carving),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.oxblood,
+                      foregroundColor: AppColors.accent,
                       visualDensity: VisualDensity.compact,
                     ),
-                    child: Text(_carving ? '접기' : '펼치기',
-                        style: AppText.ui(size: 12, weight: FontWeight.w600)),
+                    child: Text(
+                      _carving ? '접기' : '펼치기',
+                      style: AppText.ui(size: 12, weight: FontWeight.w600),
+                    ),
                   ),
                 ],
               ),
@@ -983,9 +1014,16 @@ class _StampSheetState extends State<_StampSheet> {
                 child: Column(
                   children: [
                     _field(_center, '가운데', '관람 완료'),
-                    _field(_top, _spec.shape.curved ? '위 (둥글게)' : '위', 'ARTICKET'),
-                    _field(_bottom, _spec.shape.curved ? '아래 (둥글게)' : '아래',
-                        '2026.07.14'),
+                    _field(
+                      _top,
+                      _spec.shape.curved ? '위 (둥글게)' : '위',
+                      'ARTICKET',
+                    ),
+                    _field(
+                      _bottom,
+                      _spec.shape.curved ? '아래 (둥글게)' : '아래',
+                      '2026.07.14',
+                    ),
                   ],
                 ),
               ),
@@ -1032,8 +1070,10 @@ class _StampSheetState extends State<_StampSheet> {
       children: [
         SizedBox(
           width: 78,
-          child: Text(label,
-              style: AppText.ui(size: 11, color: AppColors.pulp)),
+          child: Text(
+            label,
+            style: AppText.ui(size: 11, color: AppColors.pulp),
+          ),
         ),
         Expanded(
           child: TextField(
@@ -1067,8 +1107,7 @@ class _StampSheetState extends State<_StampSheet> {
 enum PhotoSource {
   gallery('갤러리에서 고르기', '앨범을 엽니다', Icons.photo_library_outlined),
   camera('지금 찍기', '카메라를 엽니다', Icons.photo_camera_outlined),
-  blank('비워 두기', '색만 채운 채 붙이고, 나중에 사진을 넣습니다',
-      Icons.crop_original_outlined);
+  blank('비워 두기', '색만 채운 채 붙이고, 나중에 사진을 넣습니다', Icons.crop_original_outlined);
 
   const PhotoSource(this.label, this.detail, this.icon);
 
@@ -1103,7 +1142,10 @@ Future<PhotoSource?> pickPhotoSource(BuildContext context) {
                 Navigator.pop(context, s);
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 13,
+                ),
                 child: Row(
                   children: [
                     Icon(s.icon, size: 21, color: AppColors.foil),
@@ -1112,20 +1154,30 @@ Future<PhotoSource?> pickPhotoSource(BuildContext context) {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.label,
-                              style: AppText.ui(
-                                  size: 14,
-                                  weight: FontWeight.w600,
-                                  color: AppColors.ink)),
+                          Text(
+                            s.label,
+                            style: AppText.ui(
+                              size: 14,
+                              weight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text(s.detail,
-                              style: AppText.ui(
-                                  size: 11.5, color: AppColors.inkSoft)),
+                          Text(
+                            s.detail,
+                            style: AppText.ui(
+                              size: 11.5,
+                              color: AppColors.inkSoft,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right,
-                        size: 18, color: AppColors.pulp),
+                    const Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.pulp,
+                    ),
                   ],
                 ),
               ),

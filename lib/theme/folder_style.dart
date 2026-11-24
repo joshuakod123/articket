@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// 서류철 탭에 이름을 어떤 "필기구"로 적었는지.
 ///
@@ -25,7 +24,8 @@ enum FolderFont {
   bool get onTape => this == FolderFont.dymo;
 
   /// 대문자로 강제할지. (한글이 섞이면 자동으로 무시됩니다)
-  bool get upperCase => this == FolderFont.dymo || this == FolderFont.typewriter;
+  bool get upperCase =>
+      this == FolderFont.dymo || this == FolderFont.typewriter;
 
   /// 같은 시각 크기를 내기 위한 서체별 보정. 손글씨는 작아 보여서 키웁니다.
   double get sizeScale => switch (this) {
@@ -40,41 +40,47 @@ enum FolderFont {
   TextStyle style({double size = 12, Color? color}) {
     final s = size * sizeScale;
     return switch (this) {
-      FolderFont.dymo => GoogleFonts.courierPrime(
+      FolderFont.dymo => TextStyle(
+        fontFamily: 'TicketMono',
         fontSize: s,
         fontWeight: FontWeight.w700,
         letterSpacing: 2.6,
         height: 1.0,
         color: color,
       ),
-      FolderFont.typewriter => GoogleFonts.courierPrime(
+      FolderFont.typewriter => TextStyle(
+        fontFamily: 'TicketMono',
         fontSize: s,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.5,
         height: 1.05,
         color: color,
       ),
-      FolderFont.serif => GoogleFonts.notoSerifKr(
+      FolderFont.serif => TextStyle(
+        fontFamily: 'TicketSerif',
         fontSize: s,
         fontWeight: FontWeight.w600,
         letterSpacing: -0.1,
         height: 1.1,
         color: color,
       ),
-      FolderFont.hand => GoogleFonts.nanumPenScript(
+      FolderFont.hand => TextStyle(
+        fontFamily: 'TicketHand',
         fontSize: s,
         fontWeight: FontWeight.w400,
         letterSpacing: 0.2,
         height: 1.0,
         color: color,
       ),
-      FolderFont.poster => GoogleFonts.blackHanSans(
+      FolderFont.poster => TextStyle(
+        fontFamily: 'AppSans',
         fontSize: s,
         letterSpacing: 0.3,
         height: 1.1,
         color: color,
       ),
-      FolderFont.round => GoogleFonts.jua(
+      FolderFont.round => TextStyle(
+        fontFamily: 'AppSans',
         fontSize: s,
         letterSpacing: 0.2,
         height: 1.1,
@@ -85,7 +91,7 @@ enum FolderFont {
 
   /// 저장/복원용. enum 인덱스 대신 이름을 씁니다(항목 순서가 바뀌어도 안전).
   static FolderFont parse(String? name) => FolderFont.values.firstWhere(
-        (f) => f.name == name,
+    (f) => f.name == name,
     orElse: () => FolderFont.dymo,
   );
 }
@@ -96,6 +102,7 @@ enum FolderTexture {
   linen('리넨 클로스', '양장본 표지처럼 짜인 결'),
   leather('가죽', '손때 먹은 바인더'),
   marble('마블 페이퍼', '고서 면지의 물결무늬'),
+  plain('민무늬', '매끈한 무지 표지'),
   pressboard('프레스보드', '눌러 굳힌 판지');
 
   const FolderTexture(this.label, this.hint);
@@ -105,6 +112,7 @@ enum FolderTexture {
 
   /// 표면이 빛을 얼마나 되받는지. 가죽·리넨은 살짝 윤이 납니다.
   double get sheen => switch (this) {
+    FolderTexture.plain => 0.0,
     FolderTexture.kraft => 0.05,
     FolderTexture.linen => 0.11,
     FolderTexture.leather => 0.16,
@@ -113,7 +121,7 @@ enum FolderTexture {
   };
 
   static FolderTexture parse(String? name) => FolderTexture.values.firstWhere(
-        (t) => t.name == name,
+    (t) => t.name == name,
     orElse: () => FolderTexture.kraft,
   );
 }

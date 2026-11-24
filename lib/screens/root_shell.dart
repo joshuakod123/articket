@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../widgets/bottom_nav_bar.dart';
+import '../data/sync_service.dart';
+import '../data/ticket_store.dart';
 import 'archive_screen.dart';
 import 'calendar_screen.dart';
 import 'profile_screen.dart';
@@ -20,14 +23,39 @@ import 'profile_screen.dart';
 /// 안내용으로 탭바를 한 벌 더 그리면, 진짜 탭바가 바뀔 때 안내만 옛날
 /// 모습으로 남습니다. 키를 만드는 자리는 탭바를 실제로 소유한 여기입니다.
 class RootShell extends StatefulWidget {
-  const RootShell({super.key});
+  const RootShell({super.key, this.initialIndex = 0})
+    : assert(initialIndex >= 0 && initialIndex < 3);
+  final int initialIndex;
 
   @override
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
-  int _index = 0;
+class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(SyncService.instance.syncNow());
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      unawaited(TicketStore.instance.flush());
+      unawaited(SyncService.instance.flushLocalState());
+    }
+  }
+
+  late int _index = widget.initialIndex;
 
   /// 코치 마크가 도려낼 하단 탭바. [ArchiveScreen]으로 내려보냅니다.
   final _navBarKey = GlobalKey();

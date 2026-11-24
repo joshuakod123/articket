@@ -40,11 +40,7 @@ class FolderSurface extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    _lift(color, 0.06),
-                    color,
-                    _lift(color, -0.05),
-                  ],
+                  colors: [_lift(color, 0.06), color, _lift(color, -0.05)],
                   stops: const [0.0, 0.55, 1.0],
                 ),
               ),
@@ -135,6 +131,8 @@ class FolderTexturePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rng = math.Random(seed);
     switch (texture) {
+      case FolderTexture.plain:
+        break;
       case FolderTexture.kraft:
         _kraft(canvas, size, rng);
       case FolderTexture.linen:
@@ -155,8 +153,9 @@ class FolderTexturePainter extends CustomPainter {
 
     final speckles = (area / 120).clamp(60, 2200).toInt();
     for (var i = 0; i < speckles; i++) {
-      dot.color = (rng.nextBool() ? _ink(0.10) : _counter(0.07))
-          .withValues(alpha: rng.nextDouble() * 0.10);
+      dot.color = (rng.nextBool() ? _ink(0.10) : _counter(0.07)).withValues(
+        alpha: rng.nextDouble() * 0.10,
+      );
       canvas.drawCircle(
         Offset(rng.nextDouble() * size.width, rng.nextDouble() * size.height),
         rng.nextDouble() * 1.0,
@@ -282,8 +281,9 @@ class FolderTexturePainter extends CustomPainter {
     final n = (size.width * size.height / 55).clamp(200, 5000).toInt();
     for (var i = 0; i < n; i++) {
       final dark = rng.nextDouble() < 0.6;
-      fleck.color = (dark ? _ink(0.12) : _counter(0.10))
-          .withValues(alpha: rng.nextDouble() * 0.13);
+      fleck.color = (dark ? _ink(0.12) : _counter(0.10)).withValues(
+        alpha: rng.nextDouble() * 0.13,
+      );
       final w = 0.6 + rng.nextDouble() * 2.6;
       canvas.drawRect(
         Rect.fromLTWH(
@@ -347,7 +347,9 @@ class EdgeWearPainter extends CustomPainter {
         _ => Offset(depth, t * size.height),
       };
       wear
-        ..color = Colors.white.withValues(alpha: rng.nextDouble() * 0.18 * strength)
+        ..color = Colors.white.withValues(
+          alpha: rng.nextDouble() * 0.18 * strength,
+        )
         ..strokeWidth = 0.6 + rng.nextDouble() * 1.3;
       canvas.drawLine(p, p.translate(rng.nextDouble() * 5 - 2.5, 0), wear);
     }
@@ -395,13 +397,13 @@ class PaperEdge extends StatelessWidget {
 /// 라벨·표제를 이걸로 감싸면 인쇄가 아니라 **압인(deboss)** 처럼 보입니다.
 class DebossedText extends StatelessWidget {
   const DebossedText(
-      this.text, {
-        super.key,
-        required this.style,
-        this.maxLines = 1,
-        this.textAlign,
-        this.depth = 1.0,
-      });
+    this.text, {
+    super.key,
+    required this.style,
+    this.maxLines = 1,
+    this.textAlign,
+    this.depth = 1.0,
+  });
 
   final String text;
   final TextStyle style;

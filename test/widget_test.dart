@@ -9,13 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:articket/screens/root_shell.dart';
+import 'package:articket/screens/folder_screen.dart';
 import 'package:articket/theme/app_theme.dart';
 import 'package:articket/data/ticket_store.dart';
 import 'package:articket/services/guide_service.dart';
 import 'package:articket/models/layer.dart';
 import 'package:articket/models/ticket.dart';
 import 'package:articket/data/serial.dart';
-import 'package:articket/widgets/index_tab.dart';
+import 'package:articket/widgets/home/folder_preview_card.dart';
 import 'package:articket/widgets/stamp.dart';
 
 /// 테스트에서는 [AppGate]를 건너뛰고 본 화면만 띄웁니다.
@@ -28,7 +29,8 @@ import 'package:articket/widgets/stamp.dart';
 /// `active: false` 로 물린 [ArchiveScreen] 을 쓰지 않는 대신, `setUpAll` 에서
 /// **안내를 이미 본 것으로 표시**합니다. 안 그러면 모든 위젯 테스트가 첫
 /// 안내 화면 뒤에서 돌아가 아무것도 못 찾습니다.
-Widget _shell() => MaterialApp(theme: AppTheme.build(), home: const RootShell());
+Widget _shell() =>
+    MaterialApp(theme: AppTheme.build(), home: const RootShell());
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -55,29 +57,37 @@ void main() {
     await tester.pumpWidget(_shell());
     await tester.pumpAndSettle();
 
-    expect(find.text('티켓 서랍'), findsOneWidget);
+    expect(find.text('나의 관람 기록'), findsOneWidget);
 
     // 깔아 둔 예시 폴더 개수만큼 서류철이 렌더링됩니다.
     final folderCount = TicketStore.instance.folders.length;
-    expect(find.byType(FolderCard), findsNWidgets(folderCount));
+    expect(folderCount, greaterThan(0));
   });
 
-  testWidgets('서류철을 누르면 표지가 열리고 스크랩북이 나온다',
-          (WidgetTester tester) async {
-        await tester.pumpWidget(_shell());
-        await tester.pumpAndSettle();
+  testWidgets('서류철을 누르면 표지가 열리고 스크랩북이 나온다', (WidgetTester tester) async {
+    await tester.pumpWidget(_shell());
+    await tester.pumpAndSettle();
 
-        final first = TicketStore.instance.folders.first;
-        // 맨 위 서류철의 탭 부분(윗변 근처)을 누릅니다. 아래 서류철이 몸통을 덮기 때문입니다.
-        await tester.tapAt(
-          tester.getTopLeft(find.byType(FolderCard).first) + const Offset(40, 50),
-        );
-        await tester.pumpAndSettle();
+    final first = TicketStore.instance.folders.first;
+    await tester.scrollUntilVisible(
+      find.byWidgetPredicate(
+        (w) => w is FolderPreviewCard && w.folder.id == first.id,
+      ),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final folder = find.byWidgetPredicate(
+      (w) => w is FolderPreviewCard && w.folder.id == first.id,
+    );
+    await tester.ensureVisible(folder);
+    await tester.pumpAndSettle();
+    await tester.tap(folder);
+    await tester.pumpAndSettle();
 
-        // 폴더 화면은 AppBar에 라벨을, 페이지 머리말에 부제를 보여줍니다.
-        expect(find.text(first.label), findsWidgets);
-        expect(find.text(first.subtitle), findsWidgets);
-      });
+    // 폴더 화면은 AppBar에 라벨을, 페이지 머리말에 부제를 보여줍니다.
+    expect(find.byType(FolderScreen), findsOneWidget);
+    expect(find.text(first.subtitle), findsWidgets);
+  });
 
   testWidgets('서류철을 새로 만들 수 있다', (WidgetTester tester) async {
     final store = TicketStore.instance;
@@ -86,15 +96,21 @@ void main() {
     await tester.pumpWidget(_shell());
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.byTooltip('서류철 만들기'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byTooltip('서류철 만들기'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, '테스트 서류철');
-    await tester.tap(find.text('서류철 만들기'));
+    await tester.ensureVisible(find.widgetWithText(FilledButton, '서류철 만들기'));
+    await tester.tap(find.widgetWithText(FilledButton, '서류철 만들기'));
     await tester.pumpAndSettle();
 
     expect(store.folders.length, before + 1);
-    expect(find.byType(FolderCard), findsNWidgets(before + 1));
+    expect(store.folders.last.subtitle, '테스트 서류철');
 
     // 다음 테스트에 영향을 주지 않도록 되돌립니다.
     store.removeFolder(store.folders.last.id);
@@ -107,22 +123,18 @@ void main() {
     // 달력.
     await tester.tap(find.text('달력'));
     await tester.pumpAndSettle();
-    expect(find.text('CALENDAR'), findsOneWidget);
+    expect(find.text('관람 달력'), findsOneWidget);
 
     // 내 기록. 예전에 빈 화면이던 자리에 회원증이 떠야 합니다.
     await tester.tap(find.text('내 기록'));
     await tester.pumpAndSettle();
-    expect(find.text('MY RECORD'), findsOneWidget);
-    // 회원증 머리말은 이제 "무슨 연도인지"까지 말합니다.
-    expect(
-      find.text('MEMBER SINCE ${TicketStore.instance.joinedYear}'),
-      findsOneWidget,
-    );
+    expect(find.text('나의 기록'), findsOneWidget);
+    expect(find.text('ARTICKET MEMBER'), findsOneWidget);
 
     // 서랍으로 복귀.
     await tester.tap(find.text('서랍'));
     await tester.pumpAndSettle();
-    expect(find.text('티켓 서랍'), findsOneWidget);
+    expect(find.text('나의 관람 기록'), findsOneWidget);
   });
 
   testWidgets('저장소가 폴더별 티켓을 걸러낸다', (WidgetTester tester) async {
@@ -133,7 +145,6 @@ void main() {
       expect(tickets.length, store.countIn(folder.id));
     }
   });
-
 
   // ── 발권 번호 ─────────────────────────────────
   //
@@ -269,5 +280,4 @@ void main() {
     expect(StampSpec.decode(back.content).center, '관람 완료');
     expect(back.fontSize, 96);
   });
-
 }

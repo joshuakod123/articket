@@ -39,6 +39,7 @@ class LocalStore {
   static const kPrefs = 'articket.prefs.v1';
 
   /// 앱 안내를 봤는지. 기기의 사정이라 계정과 함께 지우지 않습니다.
+  static const kIntro = 'articket.intro.v1';
   static const kGuide = 'articket.guide.v1';
 
   /// 구버전이 깔아 둔 **예시 데이터를 걷어냈는지**. 한 번만 돕니다.
@@ -66,6 +67,7 @@ class LocalStore {
     kSession,
     kPrefs,
     kGuide,
+    kIntro,
   ];
 
   Future<Map<String, dynamic>?> readMap(String key) async {
