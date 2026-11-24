@@ -1,160 +1,174 @@
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../data/supabase_env.dart';
 import '../models/ticket.dart';
+import '../models/layer.dart';
 import 'auth_service.dart';
 
-/// 티켓 포스터 사진.
-///
-/// ## 먼저 고치는 것 — 로컬 경로가 사라지는 문제
-///
-/// 로드맵에 "사진 영구 보관 — `posterPath` 를 `getApplicationDocumentsDirectory()`
-/// 로 복사"가 열린 항목으로 남아 있습니다. **서버보다 이게 먼저입니다.**
-///
-/// `image_picker` 가 돌려주는 경로는 **캐시 디렉터리**입니다. iOS 는 저장공간이
-/// 부족하면 예고 없이 비우고, 앱을 업데이트해도 날아갑니다. 즉 지금 상태로
-/// 서버에 올리면, 사진을 고른 그 세션에 동기화가 안 돌면 그 사진은 **원본이
-/// 이미 없습니다.** 올릴 것도 없습니다.
-///
-/// ```
-///   image_picker  →  adopt()  →  문서 디렉터리(영구)  →  syncPhotos()  →  Storage
-/// ```
-///
-/// ## 왜 서명 URL 로 바로 안 그리고 파일로 내려받나
-///
-/// 이 앱은 서랍을 여는 데 네트워크가 필요하면 안 됩니다. `Image.network` 로
-/// 그리면 비행기 안에서 스크랩북이 회색 사각형이 됩니다. 그래서 파일로
-/// 내려받아 문서 디렉터리에 두고, 화면은 예전처럼 로컬 파일만 봅니다.
-/// 화면 코드가 한 줄도 안 바뀌는 것도 덤입니다.
+/// Durable original files, private upload keys and per-device offline caches.
 class PosterStorage {
   PosterStorage._();
-
-  static final PosterStorage instance = PosterStorage._();
-
+  static final instance = PosterStorage._();
   static const _bucket = 'posters';
-
   Directory? _dir;
-
+  bool lastSyncHadErrors = false;
   Future<Directory> get _posterDir async {
     if (_dir != null) return _dir!;
     final docs = await getApplicationDocumentsDirectory();
-    final d = Directory('${docs.path}/posters');
-    if (!await d.exists()) await d.create(recursive: true);
-    return _dir = d;
+    final dir = Directory('${docs.path}/posters');
+    await dir.create(recursive: true);
+    return _dir = dir;
   }
 
-  // ── 1. 고른 사진을 영구 보관 ─────────────────────
-
-  /// `image_picker` 가 준 임시 파일을 문서 디렉터리로 복사하고 새 경로를 줍니다.
-  ///
-  /// 사진을 고른 **직후** 부르세요. 복사에 실패하면 원본 경로를 그대로
-  /// 돌려줍니다 — 복사가 안 됐다고 사진 선택 자체를 취소시키는 건 과합니다.
-  Future<String> adopt(String tempPath, String ticketId) async {
-    try {
-      final src = File(tempPath);
-      if (!await src.exists()) return tempPath;
-
-      final dst = File('${(await _posterDir).path}/$ticketId${_ext(tempPath)}');
-      await src.copy(dst.path);
-      return dst.path;
-    } catch (e) {
-      debugPrint('[poster] adopt failed: $e');
-      return tempPath;
+  Future<String> adopt(String path, String id) async {
+    final source = File(path);
+    if (!await source.exists()) {
+      throw FileSystemException('사진 원본을 찾지 못했어요', path);
     }
+    final destination = File(
+      '${(await _posterDir).path}/$id-${DateTime.now().microsecondsSinceEpoch}${_ext(path)}',
+    );
+    await source.copy(destination.path);
+    return destination.path;
   }
 
-  // ── 2. 서버와 맞추기 ─────────────────────────────
-
-  /// 올릴 것은 올리고, 내려받을 것은 내려받습니다. [SyncService] 가 부릅니다.
-  ///
-  /// 하나라도 바뀌었으면 true 를 돌려줍니다. 호출부가 그걸 보고 `posterKey`
-  /// 를 행에 한 번 더 밀어 올립니다 — 이게 없으면 사진은 스토리지에 올라가
-  /// 있는데 티켓 행에는 경로가 없어서, **다른 기기가 사진을 못 찾습니다.**
-  ///
-  /// 사진은 티켓 행보다 훨씬 무겁습니다. 실패해도 **던지지 않습니다** —
-  /// 사진 하나가 안 올라갔다고 티켓 40장의 동기화를 되돌릴 이유가 없습니다.
-  Future<bool> syncPhotos(List<Ticket> tickets) async {
+  Future<bool> syncPhotos(
+    List<Ticket> tickets, {
+    List<ArchiveFolder> folders = const [],
+    bool Function()? isCurrent,
+  }) async {
+    lastSyncHadErrors = false;
     if (!SupabaseEnv.isConfigured) return false;
     final uid = AuthService.instance.viewer?.id;
-    if (uid == null || uid.isEmpty) return false;
-
+    if (uid == null) return false;
+    bool valid() =>
+        AuthService.instance.viewer?.id == uid && (isCurrent?.call() ?? true);
     var changed = false;
-
-    for (final t in tickets) {
+    Future<void> asset(
+      String parent,
+      String id,
+      String? path,
+      String? key,
+      String? Function() currentPath,
+      String? Function() currentKey,
+      void Function(String) onPath,
+      void Function(String) onKey,
+    ) async {
+      if (!valid()) return;
       try {
-        final hasLocal = t.posterPath != null &&
-            t.posterPath!.isNotEmpty &&
-            await File(t.posterPath!).exists();
-
-        // (a) 이 기기에 원본이 있고 서버엔 없음 → 올림
-        if (hasLocal && (t.posterKey == null || t.posterKey!.isEmpty)) {
-          final key = '$uid/${t.id}${_ext(t.posterPath!)}';
-          await sb.storage.from(_bucket).upload(
-            key,
-            File(t.posterPath!),
-            fileOptions: const FileOptions(upsert: true),
+        final exists =
+            path != null && path.isNotEmpty && await File(path).exists();
+        if (exists && (key == null || key.isEmpty)) {
+          final uploaded =
+              '$uid/$parent-$id-${DateTime.now().microsecondsSinceEpoch}${_ext(path)}';
+          await sb.storage
+              .from(_bucket)
+              .upload(
+                uploaded,
+                File(path),
+                fileOptions: const FileOptions(upsert: false),
+              );
+          if (!valid()) return;
+          if (currentPath() == path && currentKey() == key) {
+            onKey(uploaded);
+            changed = true;
+          } else {
+            await sb.storage.from(_bucket).remove([uploaded]);
+          }
+        } else if (!exists && key != null && key.isNotEmpty) {
+          final bytes = await sb.storage.from(_bucket).download(key);
+          if (!valid() || currentKey() != key) return;
+          final local = File(
+            '${(await _posterDir).path}/${key.split('/').last}',
           );
-          t.posterKey = key;
+          await local.writeAsBytes(bytes, flush: true);
+          if (!valid() || currentKey() != key) return;
+          onPath(local.path);
           changed = true;
-          continue;
-        }
-
-        // (b) 서버엔 있는데 이 기기엔 없음 → 내려받음 (기기 교체·재설치)
-        if (!hasLocal && t.posterKey != null && t.posterKey!.isNotEmpty) {
-          final bytes = await sb.storage.from(_bucket).download(t.posterKey!);
-          final dst =
-          File('${(await _posterDir).path}/${t.id}${_ext(t.posterKey!)}');
-          await dst.writeAsBytes(bytes, flush: true);
-          t.posterPath = dst.path;
-          changed = true;
+        } else if (path != null && path.isNotEmpty && !exists) {
+          lastSyncHadErrors = true;
         }
       } catch (e) {
-        debugPrint('[poster] ${t.id}: $e');
+        lastSyncHadErrors = true;
+        debugPrint('[photo] $e');
       }
+    }
+
+    Future<void> layers(String parent, List<ScrapLayer> items) async {
+      for (final l in items.where((l) => l.kind == LayerKind.photo)) {
+        await asset(
+          parent,
+          l.id,
+          l.content,
+          l.photoKey,
+          () => l.content,
+          () => l.photoKey,
+          (v) => l.content = v,
+          (v) => l.photoKey = v,
+        );
+      }
+    }
+
+    for (final t in tickets) {
+      await asset(
+        t.id,
+        'poster',
+        t.posterPath,
+        t.posterKey,
+        () => t.posterPath,
+        () => t.posterKey,
+        (v) => t.posterPath = v,
+        (v) => t.posterKey = v,
+      );
+      await layers(t.id, t.layers);
+    }
+    for (final f in folders) {
+      await layers(f.id, f.pageLayers);
     }
     return changed;
   }
 
-  /// 티켓이 지워질 때 서버 사진도 같이. 묘비만 세우면 파일은 계속 요금을 씁니다.
-  Future<void> removeRemote(List<String> ticketIds) async {
-    if (!SupabaseEnv.isConfigured || ticketIds.isEmpty) return;
+  Future<void> removeRemote(List<String> ids) async {
+    if (!SupabaseEnv.isConfigured || ids.isEmpty) return;
     final uid = AuthService.instance.viewer?.id;
-    if (uid == null || uid.isEmpty) return;
-
-    try {
-      // 확장자를 모르므로 폴더를 훑어 이름으로 맞춥니다.
-      final files = await sb.storage.from(_bucket).list(path: uid);
-      final targets = <String>[
-        for (final f in files)
-          if (ticketIds.any((id) => f.name.startsWith(id))) '$uid/${f.name}'
-      ];
-      if (targets.isNotEmpty) {
-        await sb.storage.from(_bucket).remove(targets);
-      }
-    } catch (e) {
-      debugPrint('[poster] remote cleanup: $e');
+    if (uid == null) return;
+    var offset = 0;
+    final keys = <String>[];
+    while (true) {
+      final files = await sb.storage
+          .from(_bucket)
+          .list(
+            path: uid,
+            searchOptions: SearchOptions(limit: 100, offset: offset),
+          );
+      keys.addAll(
+        files
+            .where((f) => ids.any((id) => f.name.startsWith(id)))
+            .map((f) => '$uid/${f.name}'),
+      );
+      if (files.length < 100) break;
+      offset += 100;
+    }
+    for (var i = 0; i < keys.length; i += 100) {
+      await sb.storage.from(_bucket).remove(keys.skip(i).take(100).toList());
     }
   }
 
-  /// 탈퇴 뒤 기기에 남은 사진 정리. `LocalStore.wipe()` 는 이걸 모릅니다.
-  ///
-  /// 플러그인이 없는 환경(위젯 테스트)에서도 던지지 않습니다.
   Future<void> wipeLocal() async {
     try {
       final docs = await getApplicationDocumentsDirectory();
-      final d = Directory('${docs.path}/posters');
-      if (await d.exists()) await d.delete(recursive: true);
+      final dir = Directory('${docs.path}/posters');
+      if (await dir.exists()) await dir.delete(recursive: true);
       _dir = null;
     } catch (_) {}
   }
 
   static String _ext(String path) {
-    final i = path.lastIndexOf('.');
-    if (i < 0 || path.length - i > 6) return '.jpg';
-    return path.substring(i).toLowerCase();
+    final ext = path.split('.').last.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'webp', 'heic'].contains(ext)
+        ? '.$ext'
+        : '.jpg';
   }
 }

@@ -1,11 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 
 import '../data/ticket_store.dart';
 import '../models/ticket.dart';
-import '../services/guide_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/paper.dart';
@@ -14,10 +12,10 @@ import '../widgets/scrap_page.dart';
 import '../widgets/scrapbook.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/ticket_canvas.dart';
-import 'onboarding/ticket_guide.dart';
 import 'page_decor_screen.dart';
 import 'share_card_screen.dart';
 import 'ticket_detail_screen.dart';
+import 'ticket_create_screen.dart';
 
 /// 보기 방식. 기본은 스크랩북(펼친 다이어리)입니다.
 enum FolderView { book, grid, list }
@@ -77,7 +75,9 @@ class _FolderScreenState extends State<FolderScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.folder.label,
+          widget.folder.subtitle.isEmpty
+              ? widget.folder.label
+              : widget.folder.subtitle,
           style: widget.folder.font.style(size: 13, color: AppColors.ink),
         ),
         actions: [
@@ -121,9 +121,10 @@ class _FolderScreenState extends State<FolderScreen> {
               }
 
               return switch (_view) {
-                FolderView.book => widget.folder.freeLayout
-                    ? _freeBook(tickets)
-                    : _book(tickets),
+                FolderView.book =>
+                  widget.folder.freeLayout
+                      ? _freeBook(tickets)
+                      : _book(tickets),
                 FolderView.grid => _grid(tickets),
                 FolderView.list => _list(tickets),
               };
@@ -136,7 +137,7 @@ class _FolderScreenState extends State<FolderScreen> {
         onPressed: _create,
         code: 'NEW',
         hint:
-        '${widget.folder.label} · ${store.countIn(widget.folder.id)} FILED',
+            '${widget.folder.label} · ${store.countIn(widget.folder.id)} FILED',
       ),
     );
   }
@@ -168,7 +169,7 @@ class _FolderScreenState extends State<FolderScreen> {
                 folder: widget.folder,
                 seed: widget.folder.id.hashCode + i,
                 footer:
-                'PAGE ${(i + 1).toString().padLeft(2, '0')} / ${pages.length.toString().padLeft(2, '0')}',
+                    'PAGE ${(i + 1).toString().padLeft(2, '0')} / ${pages.length.toString().padLeft(2, '0')}',
                 child: AutoScrapPage(
                   tickets: pages[i],
                   pageIndex: i,
@@ -178,14 +179,16 @@ class _FolderScreenState extends State<FolderScreen> {
               );
 
               return Transform(
-                alignment:
-                delta >= 0 ? Alignment.centerLeft : Alignment.centerRight,
+                alignment: delta >= 0
+                    ? Alignment.centerLeft
+                    : Alignment.centerRight,
                 transform: matrix,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
                   child: DecoratedBox(
-                    decoration:
-                    BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
+                    decoration: BoxDecoration(
+                      boxShadow: paperShadow(depth: 0.9),
+                    ),
                     // 지금 보고 있는 페이지만 공유 대상으로 표시합니다.
                     child: i == _page.round()
                         ? RepaintBoundary(key: _pageKey, child: page)
@@ -265,7 +268,7 @@ class _FolderScreenState extends State<FolderScreen> {
               childAspectRatio: 0.56,
             ),
             delegate: SliverChildBuilderDelegate(
-                  (context, i) => _GridCell(
+              (context, i) => _GridCell(
                 ticket: tickets[i],
                 onDelete: () => _confirmDelete(tickets[i]),
               ),
@@ -301,11 +304,15 @@ class _FolderScreenState extends State<FolderScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.folder.subtitle,
-            style: AppText.display(size: 30, color: AppColors.ink)),
+        Text(
+          widget.folder.subtitle,
+          style: AppText.display(size: 30, color: AppColors.ink),
+        ),
         const SizedBox(height: 6),
-        Text('$count장 · 목록 보기에서 하나씩 정리해요',
-            style: AppText.data(size: 10, color: AppColors.inkSoft)),
+        Text(
+          '$count장 · 목록 보기에서 하나씩 정리해요',
+          style: AppText.data(size: 10, color: AppColors.inkSoft),
+        ),
       ],
     ),
   );
@@ -359,31 +366,9 @@ class _FolderScreenState extends State<FolderScreen> {
   /// 빈 티켓 한 장과 낯선 툴바 앞에 놓이게 됩니다. 안내는 딱 한 번 뜨고,
   /// 그 뒤로는 이 함수가 곧장 발권합니다.
   Future<void> _create() async {
-    final guide = GuideService.instance;
-    await guide.load();
-    if (!mounted) return;
-
-    if (!guide.sawWorkshop) {
-      await showTicketWorkshopGuide(context);
-      await guide.markWorkshopSeen();
-      if (!mounted) return;
-    }
-
-    final id = const Uuid().v4();
-    // 발권 번호는 여기서 만들지 않습니다.
-    // store.add() 가 이 순간 딱 한 번 도장을 찍고, 그 뒤로는 바뀌지 않습니다.
-    final ticket = Ticket(
-      id: id,
-      folderId: widget.folder.id,
-      title: '제목 없는 전시',
-      venue: '장소 미정',
-      visitedAt: DateTime.now(),
-      posterTint: [widget.folder.color, AppColors.ink],
-    );
-    store.add(ticket);
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => TicketDetailScreen(ticketId: id),
+        builder: (_) => TicketCreateScreen(folderId: widget.folder.id),
       ),
     );
   }
@@ -395,26 +380,33 @@ class _FolderScreenState extends State<FolderScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.stockLight,
         shape: const RoundedRectangleBorder(),
-        title: Text('이 티켓을 버릴까요?',
-            style: AppText.ui(size: 16, color: AppColors.ink)),
+        title: Text(
+          '이 티켓을 버릴까요?',
+          style: AppText.ui(size: 16, color: AppColors.ink),
+        ),
         content: Text(
           '「${ticket.title.replaceAll('\n', ' ')}」\n'
-              '붙여둔 것도 같이 사라져요. 되돌릴 수 없어요.',
+          '붙여둔 것도 같이 사라져요. 되돌릴 수 없어요.',
           style: AppText.ui(size: 13, height: 1.6, color: AppColors.inkSoft),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('그대로 두기',
-                style: AppText.ui(size: 13, color: AppColors.ink)),
+            child: Text(
+              '그대로 두기',
+              style: AppText.ui(size: 13, color: AppColors.ink),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('버리기',
-                style: AppText.ui(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    color: AppColors.oxblood)),
+            child: Text(
+              '버리기',
+              style: AppText.ui(
+                size: 13,
+                weight: FontWeight.w600,
+                color: AppColors.oxblood,
+              ),
+            ),
           ),
         ],
       ),
@@ -533,7 +525,9 @@ class _SharePage extends StatelessWidget {
                 child: folder.freeLayout
                     ? const SizedBox.expand()
                     : AutoScrapPage(
-                    tickets: tickets.take(2).toList(), pageIndex: 0),
+                        tickets: tickets.take(2).toList(),
+                        pageIndex: 0,
+                      ),
               ),
             ),
             if (folder.freeLayout)
@@ -656,23 +650,30 @@ class _ListRow extends StatelessWidget {
                     style: AppText.display(size: 18, color: AppColors.ink),
                   ),
                   const SizedBox(height: 4),
-                  Text('${ticket.dateLabel}  ·  ${ticket.venue}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.ui(size: 12, color: AppColors.inkSoft)),
+                  Text(
+                    '${ticket.dateLabel}  ·  ${ticket.venue}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.ui(size: 12, color: AppColors.inkSoft),
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            Text('★ ${ticket.rating}',
-                style: AppText.data(size: 11, color: AppColors.foil)),
+            Text(
+              '★ ${ticket.rating}',
+              style: AppText.data(size: 11, color: AppColors.foil),
+            ),
             // 길게 누르기가 어려운 환경에서도 지울 수 있는, 눈에 보이는 길.
             IconButton(
               tooltip: '버리기',
               onPressed: onDelete,
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.delete_outline,
-                  size: 18, color: AppColors.pulp),
+              icon: const Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: AppColors.pulp,
+              ),
             ),
           ],
         ),
@@ -693,8 +694,10 @@ class _Empty extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('아직 비어 있어요',
-              style: AppText.ui(size: 14, color: AppColors.inkSoft)),
+          Text(
+            '아직 비어 있어요',
+            style: AppText.ui(size: 14, color: AppColors.inkSoft),
+          ),
           const SizedBox(height: 14),
           OutlinedButton(
             onPressed: onCreate,

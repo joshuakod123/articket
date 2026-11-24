@@ -10,11 +10,7 @@ import '../theme/app_colors.dart';
 ///
 /// 이미지 에셋 없이 CustomPainter로만 찍습니다. 시드가 같으면 무늬도 같습니다.
 class GrainPainter extends CustomPainter {
-  GrainPainter({
-    this.opacity = 0.05,
-    this.seed = 7,
-    this.fiber = 0.5,
-  });
+  GrainPainter({this.opacity = 0.05, this.seed = 7, this.fiber = 0.5});
 
   final double opacity;
   final int seed;
@@ -47,7 +43,7 @@ class GrainPainter extends CustomPainter {
     final speckles = (area / 90).clamp(60, 2400).toInt();
     final buckets = List.generate(
       2 * _alphaSteps * _sizeSteps,
-          (_) => <double>[],
+      (_) => <double>[],
       growable: false,
     );
 
@@ -78,8 +74,9 @@ class GrainPainter extends CustomPainter {
       final dark = b ~/ (_sizeSteps * _alphaSteps) == 1;
 
       paint
-        ..color = (dark ? Colors.black : Colors.white)
-            .withValues(alpha: opacity * (ai + 0.5) / _alphaSteps)
+        ..color = (dark ? Colors.black : Colors.white).withValues(
+          alpha: opacity * (ai + 0.5) / _alphaSteps,
+        )
         ..strokeWidth = 2 * 0.9 * (si + 0.5) / _sizeSteps;
 
       canvas.drawRawPoints(
@@ -106,8 +103,9 @@ class GrainPainter extends CustomPainter {
 
       strand
         ..strokeWidth = 0.5 + rng.nextDouble() * 0.5
-        ..color = (dark ? Colors.black : Colors.white)
-            .withValues(alpha: opacity * 0.85 * rng.nextDouble());
+        ..color = (dark ? Colors.black : Colors.white).withValues(
+          alpha: opacity * 0.85 * rng.nextDouble(),
+        );
 
       canvas.drawLine(
         Offset(x, y),
@@ -143,14 +141,8 @@ class WallGrain extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: RepaintBoundary(
-          child: CustomPaint(
-            painter: GrainPainter(opacity: opacity, seed: seed, fiber: 0.35),
-          ),
-        ),
-      ),
+    return const Positioned.fill(
+      child: IgnorePointer(child: SizedBox.shrink()),
     );
   }
 }
@@ -196,8 +188,7 @@ class PaperSurface extends StatelessWidget {
         Positioned.fill(
           child: IgnorePointer(
             child: CustomPaint(
-              painter:
-              GrainPainter(opacity: grain, seed: seed, fiber: fiber),
+              painter: GrainPainter(opacity: grain, seed: seed, fiber: fiber),
             ),
           ),
         ),
@@ -291,8 +282,9 @@ List<BoxShadow> paperShadow({double depth = 1, double lift = 0}) {
   return [
     // 확산 — 들수록 넓고 멀어지되, 픽셀당 농도는 옅어집니다.
     BoxShadow(
-      color: const Color(0xFF3B2F1E)
-          .withValues(alpha: (0.18 - 0.05 * l) * depth * (1 + 0.5 * l)),
+      color: const Color(
+        0xFF3B2F1E,
+      ).withValues(alpha: (0.18 - 0.05 * l) * depth * (1 + 0.5 * l)),
       blurRadius: (22 + 26 * l) * depth,
       offset: Offset(0, (10 + 14 * l) * depth),
     ),

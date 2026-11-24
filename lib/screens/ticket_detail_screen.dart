@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -15,6 +17,7 @@ import '../widgets/ticket_card.dart';
 import 'editor_screen.dart';
 import 'share_card_screen.dart';
 import 'ticket_style_sheet.dart';
+import 'record_sheet.dart';
 
 // 에디터가 이 파일에서 가져다 쓰던 이름을 그대로 다시 내보냅니다.
 export '../widgets/scrap_layers.dart' show buildLayerContent;
@@ -54,9 +57,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
 
   /// 자이로가 없는 기기(데스크톱/웹/시뮬레이터)에서도 죽지 않도록 감쌉니다.
   void _listenGyro() {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
       _gyro = gyroscopeEventStream().listen(
-            (e) {
+        (e) {
           if (!mounted) return;
           setState(() {
             _tilt = (_tilt * 0.85 + e.y * 0.15).clamp(-1.0, 1.0);
@@ -72,7 +76,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
 
   @override
   void dispose() {
-    _gyro?.cancel();
+    final gyro = _gyro;
+    if (gyro != null) unawaited(gyro.cancel().catchError((Object _) {}));
     _flip.dispose();
     super.dispose();
   }
@@ -88,101 +93,147 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: store,
-      builder: (context, _) {
-        final ticket = store.byId(widget.ticketId);
-        if (ticket == null) {
-          return const Scaffold(body: Center(child: Text('없는 티켓이에요')));
-        }
-
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: store,
+    builder: (context, _) {
+      final ticket = store.byId(widget.ticketId);
+      if (ticket == null) {
         return Scaffold(
-          appBar: AppBar(
-            // 발권 번호(AK-2026-…)는 사람이 읽을 정보가 아니라 내부 식별자입니다.
-            // 화면 제목에는 관람일을 띄우고, 번호는 티켓 위에만 남깁니다.
-            title: Text(
-              ticket.dateLabel,
-              style: AppText.data(size: 12, spacing: 1.6, color: AppColors.ink),
+          appBar: AppBar(),
+          body: const Center(child: Text('없는 티켓이에요')),
+        );
+      }
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('나의 티켓'),
+          actions: [
+            IconButton(
+              tooltip: ticket.isFavorite ? '즐겨찾기 해제' : '즐겨찾기',
+              onPressed: () {
+                ticket.isFavorite = !ticket.isFavorite;
+                store.touch();
+              },
+              icon: Icon(
+                ticket.isFavorite ? Icons.bookmark : Icons.bookmark_border,
+                color: ticket.isFavorite ? AppColors.accent : AppColors.ink,
+              ),
             ),
-            actions: [
-              IconButton(
-                tooltip: '모양 바꾸기',
-                icon: const Icon(Icons.crop_free),
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: AppColors.stockLight,
-                  builder: (_) =>
-                      TicketStyleSheet(ticket: ticket, store: store),
-                ),
-              ),
-              IconButton(
-                tooltip: '공유하기',
-                icon: const Icon(Icons.ios_share),
-                onPressed: () => _share(ticket),
-              ),
-              IconButton(
-                tooltip: '버리기',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _confirmDelete(ticket),
-              ),
-              const SizedBox(width: 4),
-            ],
-          ),
-          body: Stack(
-            children: [
-              const WallGrain(seed: 9),
-
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    ticket.frame.horizontal ? 20 : 44,
-                    0,
-                    ticket.frame.horizontal ? 20 : 44,
-                    90,
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: ticket.frame.aspect,
-                    child: GestureDetector(
-                      onTap: _toggle,
-                      child: AnimatedBuilder(
-                        animation: _flip,
-                        builder: (context, _) => _FlipCard(
-                          progress: _flip.value,
-                          tilt: _tilt,
-                          // 앞면 = 티켓 + 붙여둔 것들. 한 몸으로 돕니다.
-                          front: Hero(
-                            tag: 'ticket-${ticket.id}',
-                            child: TicketCanvas(ticket: ticket, tilt: _tilt),
-                          ),
-                          back: TicketBack(ticket: ticket),
+            IconButton(
+              tooltip: '공유하기',
+              onPressed: () => _share(ticket),
+              icon: const Icon(Icons.ios_share),
+            ),
+            PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'delete') {
+                  _confirmDelete(ticket);
+                } else {
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    builder: (_) =>
+                        TicketStyleSheet(ticket: ticket, store: store),
+                  );
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'style', child: Text('티켓 스타일')),
+                PopupMenuItem(value: 'delete', child: Text('티켓 삭제')),
+              ],
+            ),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 30),
+          children: [
+            SizedBox(
+              height: ticket.frame.horizontal ? 240 : 455,
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: ticket.frame.aspect,
+                  child: GestureDetector(
+                    onTap: _toggle,
+                    child: AnimatedBuilder(
+                      animation: _flip,
+                      builder: (context, _) => _FlipCard(
+                        progress: _flip.value,
+                        tilt: _tilt,
+                        front: Hero(
+                          tag: 'ticket-${ticket.id}',
+                          child: TicketCanvas(ticket: ticket, tilt: _tilt),
                         ),
+                        back: TicketBack(ticket: ticket),
                       ),
                     ),
                   ),
                 ),
               ),
-
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _ActionBar(
-                  hint: _showingBack ? '누르면 앞면' : '누르면 뒷면',
-                  onDecorate: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => EditorScreen(ticketId: ticket.id),
-                    ),
+            ),
+            Center(
+              child: AnimatedBuilder(
+                animation: _flip,
+                builder: (context, _) => TextButton.icon(
+                  onPressed: _toggle,
+                  icon: const Icon(
+                    Icons.flip_camera_android_outlined,
+                    size: 18,
                   ),
+                  label: Text(_showingBack ? '앞면 보기' : '뒷면 보기'),
                 ),
               ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('나의 별점'),
+                const Spacer(),
+                Text(
+                  ticket.rating == 0 ? '아직 남기지 않았어요' : '★' * ticket.rating,
+                  style: AppText.ui(size: 22, color: AppColors.accent),
+                ),
+              ],
+            ),
+            if (ticket.oneLiner.isNotEmpty) ...[
+              const Divider(),
+              Text(ticket.oneLiner, style: AppText.hand(size: 24)),
             ],
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        openRecordSheet(context, ticket: ticket, store: store),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('기록 수정'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => EditorScreen(ticketId: ticket.id),
+                      ),
+                    ),
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                    label: const Text('꾸미기'),
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
 
   /// 티켓 한 장을 9:16 카드로 만들어 SNS로 내보냅니다.
   void _share(Ticket ticket) {
@@ -211,27 +262,34 @@ class _TicketDetailScreenState extends State<TicketDetailScreen>
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.stockLight,
         shape: const RoundedRectangleBorder(),
-        title: Text('이 티켓을 버릴까요?',
-            style: AppText.ui(size: 16, color: AppColors.ink)),
+        title: Text(
+          '이 티켓을 버릴까요?',
+          style: AppText.ui(size: 16, color: AppColors.ink),
+        ),
         // 사용자가 알아볼 수 있는 이름으로 묻습니다.
         content: Text(
           '「${ticket.title.replaceAll('\n', ' ')}」\n'
-              '붙여둔 것도 같이 사라져요. 되돌릴 수 없어요.',
+          '붙여둔 것도 같이 사라져요. 되돌릴 수 없어요.',
           style: AppText.ui(size: 13, height: 1.6, color: AppColors.inkSoft),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('그대로 두기',
-                style: AppText.ui(size: 13, color: AppColors.ink)),
+            child: Text(
+              '그대로 두기',
+              style: AppText.ui(size: 13, color: AppColors.ink),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('버리기',
-                style: AppText.ui(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    color: AppColors.oxblood)),
+            child: Text(
+              '버리기',
+              style: AppText.ui(
+                size: 13,
+                weight: FontWeight.w600,
+                color: AppColors.oxblood,
+              ),
+            ),
           ),
         ],
       ),
@@ -276,62 +334,11 @@ class _FlipCard extends StatelessWidget {
         // 뒷면은 한 번 더 뒤집어야 글씨가 정방향으로 보입니다.
         child: isBack
             ? Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()..rotateY(math.pi),
-          child: back,
-        )
+                alignment: Alignment.center,
+                transform: Matrix4.identity()..rotateY(math.pi),
+                child: back,
+              )
             : front,
-      ),
-    );
-  }
-}
-
-/// 화면 아래 안내 + 꾸미기 버튼.
-class _ActionBar extends StatelessWidget {
-  const _ActionBar({required this.hint, required this.onDecorate});
-
-  final String hint;
-  final VoidCallback onDecorate;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AppColors.stock,
-        border: Border(top: BorderSide(color: AppColors.line)),
-      ),
-      child: Stack(
-        children: [
-          const WallGrain(opacity: 0.05, seed: 44),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 14, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      hint,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.ui(size: 12, color: AppColors.inkSoft),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: onDecorate,
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 17),
-                    label: Text('꾸미기',
-                        style: AppText.ui(
-                            size: 13, weight: FontWeight.w600)),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.oxblood,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

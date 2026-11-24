@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import 'holo_foil.dart';
+import 'ticket_art.dart';
+import '../theme/ticket_design.dart';
 
 /// 티켓의 포스터 영역.
 ///
@@ -46,7 +48,7 @@ class Poster extends StatelessWidget {
             ),
           ),
         if (ticket.holographic)
-        // 셰이더가 되면 회절 포일, 안 되면 조용히 그라디언트로 폴백합니다.
+          // 셰이더가 되면 회절 포일, 안 되면 조용히 그라디언트로 폴백합니다.
           HoloFoil(
             tilt: tilt,
             strength: holoStrength,
@@ -70,15 +72,22 @@ class Poster extends StatelessWidget {
     return _gradient();
   }
 
-  Widget _gradient() => DecoratedBox(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: ticket.posterTint.length >= 2
-            ? ticket.posterTint
-            : [ticket.posterTint.first, AppColors.ink],
+  Widget _gradient() {
+    if (ticket.design != TicketDesign.legacy) {
+      return CustomPaint(
+        painter: TicketArtPainter(ticket.design, ticket.posterTint),
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ticket.posterTint.length >= 2
+              ? ticket.posterTint
+              : [ticket.posterTint.first, AppColors.ink],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

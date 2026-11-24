@@ -4,13 +4,12 @@ publish_to: 'none'
 version: 0.1.0+1
 
 environment:
-  # Color.withValues / toARGB32 를 사용하므로 Flutter 3.27 이상이 필요합니다.
-  sdk: ">=3.6.0 <4.0.0"
+  # Verified with Flutter 3.32.8 / Dart 3.8.1.
+  sdk: ">=3.8.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  google_fonts: ^6.2.1      # Bodoni Moda / Space Mono / IBM Plex Sans KR
   sensors_plus: ^5.0.1      # 자이로 홀로그램 반응 (없어도 앱은 동작)
   uuid: ^4.4.0
   image_picker: ^1.1.2
@@ -18,6 +17,7 @@ dependencies:
   path_provider: ^2.1.4
   shared_preferences: ^2.3.2  # 티켓·계정·설정 로컬 저장 (탈퇴 시 통째로 삭제)
   crypto: ^3.0.5
+  url_launcher: ^6.3.1
   supabase_flutter: ^2.0.0
 
 dev_dependencies:
@@ -37,6 +37,30 @@ flutter:
   # `Image.asset('assets/logo.png')` 는 실행 중에 조용히 회색 상자가 됐습니다.
   assets:
     - assets/
+    - assets/fonts/
+    - assets/brand/
     # 실제 포스터·텍스처를 넣을 때 아래 두 줄을 살리세요.
     # - assets/posters/
     # - assets/textures/
+  fonts:
+    - family: AppSans
+      fonts:
+        - asset: assets/fonts/NotoSansKR-400.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansKR-600.ttf
+          weight: 600
+        - asset: assets/fonts/NotoSansKR-700.ttf
+          weight: 700
+    - family: TicketSerif
+      fonts:
+        - asset: assets/fonts/GowunBatang-Regular.ttf
+        - asset: assets/fonts/GowunBatang-Bold.ttf
+          weight: 700
+    - family: TicketHand
+      fonts:
+        - asset: assets/fonts/NanumPenScript-Regular.ttf
+    - family: TicketMono
+      fonts:
+        - asset: assets/fonts/CourierPrime-Regular.ttf
+        - asset: assets/fonts/CourierPrime-Bold.ttf
+          weight: 700

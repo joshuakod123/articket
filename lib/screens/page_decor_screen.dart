@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/ticket_store.dart';
 import '../models/layer.dart';
+import '../services/poster_storage.dart';
 import '../models/ticket.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
@@ -162,8 +163,11 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     setState(() {});
 
     if (!silent && mounted) {
-      PaperToast.show(context, '이제 마음대로 놓을 수 있어요',
-          detail: '끌어서 옮기고, 두 손가락으로 돌려요');
+      PaperToast.show(
+        context,
+        '이제 마음대로 놓을 수 있어요',
+        detail: '끌어서 옮기고, 두 손가락으로 돌려요',
+      );
     }
   }
 
@@ -197,60 +201,68 @@ class _PageDecorScreenState extends State<PageDecorScreen>
   Future<void> _addSticker() async {
     final picked = await pickSticker(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.sticker,
-      content: picked.content,
-      dx: 0.5,
-      dy: 0.45,
-      color: picked.color.toARGB32(),
-      fontSize: 22,
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.sticker,
+        content: picked.content,
+        dx: 0.5,
+        dy: 0.45,
+        color: picked.color.toARGB32(),
+        fontSize: 22,
+      ),
+    );
   }
 
   Future<void> _addText() async {
     final picked = await editScrapText(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.text,
-      content: picked.text,
-      dx: 0.5,
-      dy: 0.3,
-      color: picked.color.toARGB32(),
-      fontSize: picked.size,
-      font: picked.font.name,
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.text,
+        content: picked.text,
+        dx: 0.5,
+        dy: 0.3,
+        color: picked.color.toARGB32(),
+        fontSize: picked.size,
+        font: picked.font.name,
+      ),
+    );
   }
 
   Future<void> _addStamp() async {
     final picked = await pickStamp(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.stamp,
-      content: picked.spec.encode(),
-      dx: 0.74,
-      dy: 0.78,
-      rotation: -0.12,
-      color: picked.color.toARGB32(),
-      fontSize: picked.size,
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.stamp,
+        content: picked.spec.encode(),
+        dx: 0.74,
+        dy: 0.78,
+        rotation: -0.12,
+        color: picked.color.toARGB32(),
+        fontSize: picked.size,
+      ),
+    );
     Feel.stamp();
   }
 
   Future<void> _addTape() async {
     final picked = await pickTape(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.tape,
-      content: picked.pattern.name,
-      dx: 0.32,
-      dy: 0.2,
-      rotation: -0.3,
-      color: picked.color.toARGB32(),
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.tape,
+        content: picked.pattern.name,
+        dx: 0.32,
+        dy: 0.2,
+        rotation: -0.3,
+        color: picked.color.toARGB32(),
+      ),
+    );
   }
 
   /// 폴라로이드. 툴바를 누르는 것만으로 시스템 앨범이 열리지 않습니다.
@@ -263,19 +275,20 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     if (!mounted) return;
     if (source != PhotoSource.blank && path == null) return;
 
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.photo,
-      content: path ?? '',
-      dx: 0.68,
-      dy: 0.62,
-      rotation: 0.1,
-      color: AppColors.oxbloodDim.toARGB32(),
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.photo,
+        content: path ?? '',
+        dx: 0.68,
+        dy: 0.62,
+        rotation: 0.1,
+        color: AppColors.oxbloodDim.toARGB32(),
+      ),
+    );
 
     if (path == null || path.isEmpty) {
-      PaperToast.show(context, '빈 폴라로이드를 한 장 붙였어요',
-          detail: '두 번 누르면 사진이 들어가요');
+      PaperToast.show(context, '빈 폴라로이드를 한 장 붙였어요', detail: '두 번 누르면 사진이 들어가요');
     }
   }
 
@@ -289,11 +302,14 @@ class _PageDecorScreenState extends State<PageDecorScreen>
         maxWidth: 1400,
         imageQuality: 88,
       );
-      return shot?.path;
+      return shot == null
+          ? null
+          : await PosterStorage.instance.adopt(shot.path, _uuid.v4());
     } catch (e) {
       debugPrint('image pick failed: $e');
-      if (mounted) PaperToast.warn(context, '사진을 불러오지 못했어요',
-          detail: '앨범 접근 권한을 확인해 주세요');
+      if (mounted) {
+        PaperToast.warn(context, '사진을 불러오지 못했어요', detail: '앨범 접근 권한을 확인해 주세요');
+      }
       return null;
     }
   }
@@ -339,8 +355,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
     store.touch();
     Feel.tear();
     setState(() => _selected = null);
-    PaperToast.show(context, '붙였던 걸 하나 뗐어요',
-        detail: '위쪽 ↩︎ 를 누르면 돌아와요');
+    PaperToast.show(context, '붙였던 걸 하나 뗐어요', detail: '위쪽 ↩︎ 를 누르면 돌아와요');
   }
 
   Future<void> _edit(ScrapLayer layer) async {
@@ -402,6 +417,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
         if (source != PhotoSource.blank && path == null) return;
         _snapshot();
         layer.content = path ?? '';
+        layer.photoKey = null;
     }
     store.touch();
     if (mounted) setState(() {});
@@ -432,30 +448,39 @@ class _PageDecorScreenState extends State<PageDecorScreen>
 
         return Scaffold(
           appBar: AppBar(
-            title: Text('PAGE',
-                style: AppText.eyebrow(size: 12, color: AppColors.ink)),
+            title: Text(
+              'PAGE',
+              style: AppText.eyebrow(size: 12, color: AppColors.ink),
+            ),
             actions: [
               IconButton(
                 tooltip: '되돌리기',
                 onPressed: _undo.isEmpty ? null : _undoOnce,
-                icon: Icon(Icons.undo,
-                    size: 20,
-                    color: _undo.isEmpty ? AppColors.pulp : AppColors.ink),
+                icon: Icon(
+                  Icons.undo,
+                  size: 20,
+                  color: _undo.isEmpty ? AppColors.pulp : AppColors.ink,
+                ),
               ),
               IconButton(
                 tooltip: '다시 하기',
                 onPressed: _redo.isEmpty ? null : _redoOnce,
-                icon: Icon(Icons.redo,
-                    size: 20,
-                    color: _redo.isEmpty ? AppColors.pulp : AppColors.ink),
+                icon: Icon(
+                  Icons.redo,
+                  size: 20,
+                  color: _redo.isEmpty ? AppColors.pulp : AppColors.ink,
+                ),
               ),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text('완료',
-                    style: AppText.ui(
-                        size: 14,
-                        weight: FontWeight.w600,
-                        color: AppColors.oxblood)),
+                child: Text(
+                  '완료',
+                  style: AppText.ui(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: AppColors.accent,
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
             ],
@@ -475,8 +500,9 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
                     child: DecoratedBox(
-                      decoration:
-                      BoxDecoration(boxShadow: paperShadow(depth: 0.9)),
+                      decoration: BoxDecoration(
+                        boxShadow: paperShadow(depth: 0.9),
+                      ),
                       child: LayoutBuilder(
                         builder: (context, c) {
                           final canvas = Size(c.maxWidth, c.maxHeight);
@@ -495,9 +521,9 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                   child: folder.freeLayout
                                       ? const SizedBox.expand()
                                       : AutoScrapPage(
-                                    tickets: tickets.take(2).toList(),
-                                    pageIndex: 0,
-                                  ),
+                                          tickets: tickets.take(2).toList(),
+                                          pageIndex: 0,
+                                        ),
                                 ),
                               ),
 
@@ -516,11 +542,13 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                     index: i,
                                     canvas: canvas,
                                     selected:
-                                    _selected == 'ticket:${tickets[i].id}',
-                                    onSelect: () => setState(() =>
-                                    _selected = 'ticket:${tickets[i].id}'),
-                                    dragging: _dragging ==
-                                        'ticket:${tickets[i].id}',
+                                        _selected == 'ticket:${tickets[i].id}',
+                                    onSelect: () => setState(
+                                      () =>
+                                          _selected = 'ticket:${tickets[i].id}',
+                                    ),
+                                    dragging:
+                                        _dragging == 'ticket:${tickets[i].id}',
                                     onStart: () {
                                       _settle.stop();
                                       _snapshot();
@@ -528,25 +556,31 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                       _startScale = tickets[i].pscale;
                                       _startRotation = tickets[i].protation;
                                       Feel.lift();
-                                      setState(() => _dragging =
-                                      'ticket:${tickets[i].id}');
+                                      setState(
+                                        () => _dragging =
+                                            'ticket:${tickets[i].id}',
+                                      );
                                     },
                                     onUpdate: (d) {
                                       final t = tickets[i];
                                       final twoFinger = d.pointerCount > 1;
 
-                                      final rawX = ((t.px ?? 0.5) +
-                                          d.focalPointDelta.dx /
-                                              canvas.width)
-                                          .clamp(0.05, 0.95);
-                                      final rawY = ((t.py ?? 0.5) +
-                                          d.focalPointDelta.dy /
-                                              canvas.height)
-                                          .clamp(0.05, 0.95);
+                                      final rawX =
+                                          ((t.px ?? 0.5) +
+                                                  d.focalPointDelta.dx /
+                                                      canvas.width)
+                                              .clamp(0.05, 0.95);
+                                      final rawY =
+                                          ((t.py ?? 0.5) +
+                                                  d.focalPointDelta.dy /
+                                                      canvas.height)
+                                              .clamp(0.05, 0.95);
 
                                       final rawScale = twoFinger
-                                          ? (_startScale * d.scale)
-                                          .clamp(0.45, 2.2)
+                                          ? (_startScale * d.scale).clamp(
+                                              0.45,
+                                              2.2,
+                                            )
                                           : t.pscale;
                                       final rawRotation = twoFinger
                                           ? _startRotation + d.rotation
@@ -561,7 +595,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                         yGuides: SnapEngine.kPageGuides,
                                         scaleGuides: [
                                           for (final o in tickets)
-                                            if (o.id != t.id) o.pscale
+                                            if (o.id != t.id) o.pscale,
                                         ],
                                         snapRotation: twoFinger,
                                         snapScale: twoFinger,
@@ -593,7 +627,11 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                           velocity.dy / canvas.height,
                                         ),
                                         bounds: const Rect.fromLTRB(
-                                            0.05, 0.05, 0.95, 0.95),
+                                          0.05,
+                                          0.05,
+                                          0.95,
+                                          0.95,
+                                        ),
                                         onUpdate: (at) => setState(() {
                                           t.px = at.dx;
                                           t.py = at.dy;
@@ -612,35 +650,42 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                   selected: _selected == 'layer:${layer.id}',
                                   onSelect: () {
                                     setState(
-                                            () => _selected = 'layer:${layer.id}');
+                                      () => _selected = 'layer:${layer.id}',
+                                    );
                                     folder.pageLayers
                                       ..removeWhere((l) => l.id == layer.id)
                                       ..add(layer);
                                     store.touch();
                                   },
-                                  dragging:
-                                  _dragging == 'layer:${layer.id}',
+                                  dragging: _dragging == 'layer:${layer.id}',
                                   onScaleStart: () {
                                     _snapshot();
                                     _snap.begin();
                                     _startScale = layer.scale;
                                     _startRotation = layer.rotation;
                                     Feel.lift();
-                                    setState(() =>
-                                    _dragging = 'layer:${layer.id}');
+                                    setState(
+                                      () => _dragging = 'layer:${layer.id}',
+                                    );
                                   },
                                   onScaleUpdate: (d) {
                                     final twoFinger = d.pointerCount > 1;
 
-                                    final rawX = (layer.dx +
-                                        d.focalPointDelta.dx / canvas.width)
-                                        .clamp(0.0, 1.0);
-                                    final rawY = (layer.dy +
-                                        d.focalPointDelta.dy / canvas.height)
-                                        .clamp(0.0, 1.0);
+                                    final rawX =
+                                        (layer.dx +
+                                                d.focalPointDelta.dx /
+                                                    canvas.width)
+                                            .clamp(0.0, 1.0);
+                                    final rawY =
+                                        (layer.dy +
+                                                d.focalPointDelta.dy /
+                                                    canvas.height)
+                                            .clamp(0.0, 1.0);
                                     final rawScale = twoFinger
-                                        ? (_startScale * d.scale)
-                                        .clamp(0.3, 4.0)
+                                        ? (_startScale * d.scale).clamp(
+                                            0.3,
+                                            4.0,
+                                          )
                                         : layer.scale;
                                     final rawRotation = twoFinger
                                         ? _startRotation + d.rotation
@@ -655,7 +700,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                       yGuides: SnapEngine.kPageGuides,
                                       scaleGuides: [
                                         for (final o in folder.pageLayers)
-                                          if (o.id != layer.id) o.scale
+                                          if (o.id != layer.id) o.scale,
                                       ],
                                       snapRotation: twoFinger,
                                       snapScale: twoFinger,
@@ -683,8 +728,7 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                                   onEdit: () => _edit(layer),
                                 ),
 
-                              if (folder.pageLayers.isEmpty &&
-                                  tickets.isEmpty)
+                              if (folder.pageLayers.isEmpty && tickets.isEmpty)
                                 const Positioned.fill(child: _EmptyHint()),
                             ],
                           );
@@ -694,7 +738,6 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                   ),
                 ),
               ),
-
               if (pickedLayer != null)
                 _SelectedBar(
                   name: switch (pickedLayer.kind) {
@@ -724,7 +767,6 @@ class _PageDecorScreenState extends State<PageDecorScreen>
                   },
                   onDone: () => setState(() => _selected = null),
                 ),
-
               _Toolbar(
                 onSticker: _addSticker,
                 onStamp: _addStamp,
@@ -758,23 +800,24 @@ class _LayoutBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stock,
+        color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.line)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 9, 10, 9),
         child: Row(
           children: [
-            Icon(free ? Icons.open_with : Icons.auto_awesome_motion_outlined,
-                size: 16, color: AppColors.foil),
+            Icon(
+              free ? Icons.open_with : Icons.auto_awesome_motion_outlined,
+              size: 16,
+              color: AppColors.foil,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 free
                     ? '티켓을 누르면 ↺ ↻ 로 돌아가요'
-                    : (hasTickets
-                    ? '티켓은 알아서 놓여 있어요'
-                    : '티켓을 만들면 여기 붙어요'),
+                    : (hasTickets ? '티켓은 알아서 놓여 있어요' : '티켓을 만들면 여기 붙어요'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.ui(size: 12, color: AppColors.inkSoft),
@@ -784,12 +827,13 @@ class _LayoutBanner extends StatelessWidget {
               TextButton(
                 onPressed: free ? onAuto : () => onFree(),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.oxblood,
+                  foregroundColor: AppColors.accent,
                   visualDensity: VisualDensity.compact,
                 ),
-                child: Text(free ? '자동 배치' : '자유 배치',
-                    style:
-                    AppText.ui(size: 12, weight: FontWeight.w600)),
+                child: Text(
+                  free ? '자동 배치' : '자유 배치',
+                  style: AppText.ui(size: 12, weight: FontWeight.w600),
+                ),
               ),
           ],
         ),
@@ -808,13 +852,17 @@ class _EmptyHint extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('아직 빈 페이지예요',
-                style: AppText.hand(size: 24, color: AppColors.pulp)),
+            Text(
+              '아직 빈 페이지예요',
+              style: AppText.hand(size: 24, color: AppColors.pulp),
+            ),
             const SizedBox(height: 6),
             const DoodleUnderline(width: 120),
             const SizedBox(height: 10),
-            Text('아래에서 하나 골라 붙여보세요',
-                style: AppText.ui(size: 12, color: AppColors.pulp)),
+            Text(
+              '아래에서 하나 골라 붙여보세요',
+              style: AppText.ui(size: 12, color: AppColors.pulp),
+            ),
           ],
         ),
       ),
@@ -986,19 +1034,21 @@ class _Editable extends StatelessWidget {
                       right: 0,
                       top: 0,
                       child: _Handle(
-                          icon: Icons.close,
-                          color: AppColors.oxblood,
-                          scale: _handleScale,
-                          onTap: onDelete),
+                        icon: Icons.close,
+                        color: AppColors.accent,
+                        scale: _handleScale,
+                        onTap: onDelete,
+                      ),
                     ),
                     Positioned(
                       left: 0,
                       top: 0,
                       child: _Handle(
-                          icon: Icons.tune,
-                          color: AppColors.ink,
-                          scale: _handleScale,
-                          onTap: onEdit),
+                        icon: Icons.tune,
+                        color: AppColors.ink,
+                        scale: _handleScale,
+                        onTap: onEdit,
+                      ),
                     ),
                   ],
                 ],
@@ -1076,13 +1126,23 @@ class _SelectedBar extends StatelessWidget {
     return _Bar(
       name: name,
       actions: [
-        _BarAction(Icons.rotate_left, '왼쪽으로 돌리기',
-                () => onRotate(-_PageDecorScreenState._rotationStep)),
-        _BarAction(Icons.rotate_right, '오른쪽으로 돌리기',
-                () => onRotate(_PageDecorScreenState._rotationStep)),
+        _BarAction(
+          Icons.rotate_left,
+          '왼쪽으로 돌리기',
+          () => onRotate(-_PageDecorScreenState._rotationStep),
+        ),
+        _BarAction(
+          Icons.rotate_right,
+          '오른쪽으로 돌리기',
+          () => onRotate(_PageDecorScreenState._rotationStep),
+        ),
         _BarAction(Icons.tune, '고치기', onEdit),
-        _BarAction(Icons.delete_outline, '떼어내기', onDelete,
-            color: AppColors.oxblood),
+        _BarAction(
+          Icons.delete_outline,
+          '떼어내기',
+          onDelete,
+          color: AppColors.accent,
+        ),
         _BarAction(Icons.check, '완료', onDone),
       ],
     );
@@ -1116,15 +1176,20 @@ class _TicketBar extends StatelessWidget {
     return _Bar(
       name: ticket.title.replaceAll('\n', ' '),
       actions: [
-        _BarAction(Icons.rotate_left, '왼쪽으로 돌리기',
-                () => onRotate(-_PageDecorScreenState._rotationStep)),
-        _BarAction(Icons.rotate_right, '오른쪽으로 돌리기',
-                () => onRotate(_PageDecorScreenState._rotationStep)),
+        _BarAction(
+          Icons.rotate_left,
+          '왼쪽으로 돌리기',
+          () => onRotate(-_PageDecorScreenState._rotationStep),
+        ),
+        _BarAction(
+          Icons.rotate_right,
+          '오른쪽으로 돌리기',
+          () => onRotate(_PageDecorScreenState._rotationStep),
+        ),
         // 초기화는 되돌릴 게 있을 때만 나옵니다. 회전 버튼 옆에 늘 떠 있으면
         // 셋 중 무엇이 회전인지 또 헷갈립니다.
         if (tilted)
-          _BarAction(Icons.settings_backup_restore, '똑바로 되돌리기',
-              onReset),
+          _BarAction(Icons.settings_backup_restore, '똑바로 되돌리기', onReset),
         _BarAction(Icons.check, '완료', onDone),
       ],
     );
@@ -1150,7 +1215,7 @@ class _Bar extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stock,
+        color: AppColors.surface,
         border: Border(
           top: BorderSide(color: AppColors.line),
           bottom: BorderSide(color: AppColors.line),
@@ -1172,7 +1237,10 @@ class _Bar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.ui(
-                    size: 12, weight: FontWeight.w600, color: AppColors.ink),
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: AppColors.ink,
+                ),
               ),
             ),
             // 회전 버튼이 들어와 최대 다섯 개가 됐습니다. 좁은 화면에서
@@ -1212,7 +1280,7 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stock,
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
       child: Stack(
@@ -1251,8 +1319,7 @@ class _Toolbar extends StatelessWidget {
         children: [
           Icon(icon, size: 21, color: AppColors.ink),
           const SizedBox(height: 5),
-          Text(label,
-              style: AppText.ui(size: 10, color: AppColors.inkSoft)),
+          Text(label, style: AppText.ui(size: 10, color: AppColors.inkSoft)),
         ],
       ),
     ),

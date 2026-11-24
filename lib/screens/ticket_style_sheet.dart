@@ -4,6 +4,8 @@ import '../widgets/stacking_loader.dart';
 
 import '../data/ticket_store.dart';
 import '../models/ticket.dart';
+import '../theme/ticket_design.dart';
+import '../services/poster_storage.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/frame_shapes.dart';
@@ -31,8 +33,11 @@ class TicketStyleSheet extends StatefulWidget {
 
 class _TicketStyleSheetState extends State<TicketStyleSheet>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs =
-  TabController(length: 2, vsync: this, initialIndex: widget.initialTab);
+  late final TabController _tabs = TabController(
+    length: 2,
+    vsync: this,
+    initialIndex: widget.initialTab,
+  );
 
   final _picker = ImagePicker();
   bool _picking = false;
@@ -59,7 +64,12 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
         imageQuality: 90,
       );
       if (shot != null) {
-        _apply(() => t.posterPath = shot.path);
+        final path = await PosterStorage.instance.adopt(shot.path, t.id);
+        if (!mounted) return;
+        _apply(() {
+          t.posterPath = path;
+          t.posterKey = null;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -88,14 +98,32 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
               borderRadius: BorderRadius.circular(2),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Wrap(
+              spacing: 8,
+              children: TicketDesign.selectable
+                  .map(
+                    (v) => ChoiceChip(
+                      label: Text(v.label),
+                      selected: t.design == v,
+                      onSelected: (_) => _apply(() => t.design = v),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
           TabBar(
             controller: _tabs,
-            indicatorColor: AppColors.oxblood,
+            indicatorColor: AppColors.accent,
             indicatorSize: TabBarIndicatorSize.label,
             labelColor: AppColors.ink,
             unselectedLabelColor: AppColors.inkSoft,
             labelStyle: AppText.eyebrow(),
-            tabs: const [Tab(text: 'FRAME'), Tab(text: 'POSTER')],
+            tabs: const [
+              Tab(text: '프레임'),
+              Tab(text: '포스터'),
+            ],
           ),
           Expanded(
             child: TabBarView(
@@ -137,9 +165,9 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.stock,
+                    color: AppColors.surface,
                     border: Border.all(
-                      color: selected ? AppColors.oxblood : AppColors.line,
+                      color: selected ? AppColors.accent : AppColors.line,
                       width: selected ? 1.5 : 1,
                     ),
                   ),
@@ -155,18 +183,22 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
                 ),
               ),
               const SizedBox(height: 6),
-              Text(frame.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.ui(
-                    size: 12,
-                    weight: FontWeight.w600,
-                    color: selected ? AppColors.oxblood : AppColors.ink,
-                  )),
-              Text(frame.hint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.ui(size: 9, color: AppColors.inkSoft)),
+              Text(
+                frame.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.ui(
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: selected ? AppColors.accent : AppColors.ink,
+                ),
+              ),
+              Text(
+                frame.hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.ui(size: 9, color: AppColors.inkSoft),
+              ),
             ],
           ),
         );
@@ -180,7 +212,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
       controller: controller,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
       children: [
-        Text('사진 넣기', style: AppText.eyebrow(color: AppColors.oxblood)),
+        Text('사진 넣기', style: AppText.eyebrow(color: AppColors.accent)),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -204,20 +236,27 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
         if (t.hasPhoto) ...[
           const SizedBox(height: 10),
           TextButton.icon(
-            onPressed: () => _apply(() => t.posterPath = null),
-            icon: const Icon(Icons.close, size: 15, color: AppColors.oxblood),
-            label: Text('사진 빼고 색으로',
-                style: AppText.ui(size: 12, color: AppColors.oxblood)),
+            onPressed: () => _apply(() {
+              t.posterPath = null;
+              t.posterKey = null;
+            }),
+            icon: const Icon(Icons.close, size: 15, color: AppColors.accent),
+            label: Text(
+              '사진 빼고 색으로',
+              style: AppText.ui(size: 12, color: AppColors.accent),
+            ),
           ),
         ],
         const SizedBox(height: 26),
         Row(
           children: [
-            Text('색으로 채우기', style: AppText.eyebrow(color: AppColors.oxblood)),
+            Text('색으로 채우기', style: AppText.eyebrow(color: AppColors.accent)),
             const SizedBox(width: 8),
             if (t.hasPhoto)
-              Text('· 사진을 빼면 적용됩니다',
-                  style: AppText.ui(size: 10, color: AppColors.inkSoft)),
+              Text(
+                '· 사진을 빼면 적용됩니다',
+                style: AppText.ui(size: 10, color: AppColors.inkSoft),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -235,10 +274,14 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
           activeTrackColor: AppColors.foil,
           value: t.holographic,
           onChanged: (v) => _apply(() => t.holographic = v),
-          title: Text('홀로그램 텍스처',
-              style: AppText.ui(size: 14, color: AppColors.ink)),
-          subtitle: Text('기기를 기울이면 펄이 흐릅니다',
-              style: AppText.ui(size: 11, color: AppColors.inkSoft)),
+          title: Text(
+            '홀로그램 텍스처',
+            style: AppText.ui(size: 14, color: AppColors.ink),
+          ),
+          subtitle: Text(
+            '기기를 기울이면 펄이 흐릅니다',
+            style: AppText.ui(size: 11, color: AppColors.inkSoft),
+          ),
         ),
       ],
     );
@@ -246,7 +289,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
 
   bool _sameTint(List<Color> colors) =>
       t.posterTint.length == colors.length &&
-          t.posterTint.first.toARGB32() == colors.first.toARGB32();
+      t.posterTint.first.toARGB32() == colors.first.toARGB32();
 
   Widget _sourceButton({
     required IconData icon,
@@ -258,13 +301,17 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
-          color: AppColors.stock,
+          color: AppColors.surface,
           border: Border.all(color: AppColors.line),
         ),
         child: Column(
           children: [
             if (_picking)
-              const SizedBox(width: 24, height: 24, child: StackingLoader(size: 24))
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: StackingLoader(size: 24),
+              )
             else
               Icon(icon, size: 20, color: AppColors.ink),
             const SizedBox(height: 8),
@@ -280,6 +327,7 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
       onTap: () => _apply(() {
         t.posterTint = palette.colors;
         t.posterPath = null;
+        t.posterKey = null;
       }),
       child: SizedBox(
         width: 72,
@@ -295,26 +343,31 @@ class _TicketStyleSheetState extends State<TicketStyleSheet>
                   colors: palette.colors,
                 ),
                 border: Border.all(
-                  color: selected ? AppColors.oxblood : Colors.transparent,
+                  color: selected ? AppColors.accent : Colors.transparent,
                   width: 2,
                 ),
               ),
               child: selected
                   ? const Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.check,
-                      size: 14, color: AppColors.stockLight),
-                ),
-              )
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.check,
+                          size: 14,
+                          color: AppColors.stockLight,
+                        ),
+                      ),
+                    )
                   : null,
             ),
             const SizedBox(height: 5),
-            Text(palette.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.ui(size: 10, color: AppColors.inkSoft)),
+            Text(
+              palette.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.ui(size: 10, color: AppColors.inkSoft),
+            ),
           ],
         ),
       ),

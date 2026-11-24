@@ -110,7 +110,6 @@ class TicketStore extends ChangeNotifier {
     // 구버전에서 올라온, 아직 번호가 없는 티켓에 지금 도장을 찍습니다.
     // 이렇게 찍힌 번호는 첫 동기화에서 `raise_ticket_counter` 가 서버 카운터로
     // 끌어올립니다. 그래야 서버가 1번부터 발급해 충돌하는 일이 없습니다.
-    _issueMissing();
     _syncIssuedFloor();
 
     _ready = true;
@@ -144,9 +143,11 @@ class TicketStore extends ChangeNotifier {
     if (!hadSeed) return;
 
     _tickets.removeWhere((t) => kSampleTicketIds.contains(t.id));
-    _folders.removeWhere((f) =>
-    kSampleFolderIds.contains(f.id) &&
-        !_tickets.any((t) => t.folderId == f.id));
+    _folders.removeWhere(
+      (f) =>
+          kSampleFolderIds.contains(f.id) &&
+          !_tickets.any((t) => t.folderId == f.id),
+    );
 
     await _local.writeFlag(LocalStore.kSeeded, false);
   }
@@ -186,14 +187,29 @@ class TicketStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _persist() async {
-    if (!_ready) return;
-    await _local.write(
-        LocalStore.kFolders, _folders.map((f) => f.toJson()).toList());
-    await _local.write(
-        LocalStore.kTickets, _tickets.map((t) => t.toJson()).toList());
-    await _local.write(
-        LocalStore.kIssued, _issued.map((k, v) => MapEntry('$k', v)));
+  Future<void>? _saveTail;
+  Future<void> flush() => _saveTail ?? Future.value();
+  Future<void> _persist() {
+    if (!_ready) return Future.value();
+    final folders = _folders.map((f) => f.toJson()).toList();
+    final tickets = _tickets.map((t) => t.toJson()).toList();
+    final issued = _issued.map((k, v) => MapEntry('$k', v));
+    Future<void> write() async {
+      await _local.write(LocalStore.kFolders, folders);
+      await _local.write(LocalStore.kTickets, tickets);
+      await _local.write(LocalStore.kIssued, issued);
+    }
+
+    final previous = _saveTail;
+    late final Future<void> task;
+    task =
+        (previous == null
+                ? write()
+                : previous.catchError((Object _) {}).then((_) => write()))
+            .whenComplete(() {
+              if (identical(_saveTail, task)) _saveTail = null;
+            });
+    return _saveTail = task;
   }
 
   /// 값이 바뀔 때마다 부르는 한 줄. 저장은 기다리지 않습니다(화면을 붙잡지 않게).
@@ -232,6 +248,7 @@ class TicketStore extends ChangeNotifier {
   /// 예전 코드는 그걸 방금 지워버렸습니다.
   Future<void> wipe() async {
     await SyncService.instance.reset();
+    await flush();
     await PosterStorage.instance.wipeLocal();
 
     _tickets.clear();
@@ -301,7 +318,9 @@ class TicketStore extends ChangeNotifier {
   void add(Ticket ticket) {
     _tickets.add(ticket);
     _changed();
-    if (!ticket.isIssued) unawaited(_stampFromServer(ticket));
+    if (!ticket.isIssued && !AuthService.instance.isSignedIn) {
+      unawaited(_stampFromServer(ticket));
+    }
   }
 
   Future<void> _stampFromServer(Ticket t) async {
@@ -400,7 +419,9 @@ class TicketStore extends ChangeNotifier {
   /// 관람을 시작한 해. 가장 오래된 기록의 연도입니다.
   int get joinedYear {
     if (_tickets.isEmpty) return DateTime.now().year;
-    return _tickets.map((t) => t.visitedAt.year).reduce((a, b) => a < b ? a : b);
+    return _tickets
+        .map((t) => t.visitedAt.year)
+        .reduce((a, b) => a < b ? a : b);
   }
 
   /// 회원 번호(`M-2025-0006`).

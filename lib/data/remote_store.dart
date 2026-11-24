@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../models/ticket.dart';
 import 'supabase_env.dart';
 
@@ -34,8 +35,8 @@ class RemoteStore {
     'id', 'folderId', 'title', 'venue', 'visitedAt',
     'issuedYear', 'issuedSeq', 'genre', 'rating', 'oneLiner',
     'isPublic', 'posterKey',
-    'serial',      // 사람이 읽으라고 넣던 파생값. 서버에 두면 두 벌이 됩니다
-    'posterPath',  // ⚠ 기기 안의 경로. 다른 기기에서는 아무 의미가 없습니다
+    'serial', // 사람이 읽으라고 넣던 파생값. 서버에 두면 두 벌이 됩니다
+    'posterPath', // ⚠ 기기 안의 경로. 다른 기기에서는 아무 의미가 없습니다
   };
 
   // ── 티켓 ────────────────────────────────────────
@@ -59,14 +60,16 @@ class RemoteStore {
       'deleted_at': null, // 되살아난 경우(묘비 뒤 재생성)를 위해 명시적으로 비웁니다
       'payload': {
         for (final e in j.entries)
-          if (!_promoted.contains(e.key)) e.key: e.value,
+          if (!_promoted.contains(e.key))
+            e.key: e.key == 'layers' ? cloudLayers(e.value) : e.value,
       },
     };
   }
 
   static Ticket ticketFromRow(Map<String, dynamic> r) {
     final payload = Map<String, dynamic>.from(
-        (r['payload'] as Map?)?.cast<String, dynamic>() ?? const {});
+      (r['payload'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
     return Ticket.fromJson({
       ...payload,
       'id': r['id'],
@@ -89,7 +92,11 @@ class RemoteStore {
 
   // ── 서류철 ──────────────────────────────────────
 
-  static Map<String, dynamic> folderRow(ArchiveFolder f, String uid, int index) {
+  static Map<String, dynamic> folderRow(
+    ArchiveFolder f,
+    String uid,
+    int index,
+  ) {
     final j = f.toJson();
     return {
       'id': f.id,
@@ -100,14 +107,16 @@ class RemoteStore {
       'deleted_at': null,
       'payload': {
         for (final e in j.entries)
-          if (!{'id', 'label', 'subtitle'}.contains(e.key)) e.key: e.value,
+          if (!{'id', 'label', 'subtitle'}.contains(e.key))
+            e.key: e.key == 'pageLayers' ? cloudLayers(e.value) : e.value,
       },
     };
   }
 
   static ArchiveFolder folderFromRow(Map<String, dynamic> r) {
     final payload = Map<String, dynamic>.from(
-        (r['payload'] as Map?)?.cast<String, dynamic>() ?? const {});
+      (r['payload'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
     return ArchiveFolder.fromJson({
       ...payload,
       'id': r['id'],
@@ -132,9 +141,23 @@ class RemoteStore {
   /// 첫 동기화에서 한 번만 부르면 됩니다.
   static Future<void> raiseCounter(int year, int seq) async {
     try {
-      await sb.rpc('raise_ticket_counter',
-          params: {'p_year': year, 'p_seq': seq});
+      await sb.rpc(
+        'raise_ticket_counter',
+        params: {'p_year': year, 'p_seq': seq},
+      );
     } catch (_) {}
+  }
+
+  /// Local paths must never be sent to another device as if they were assets.
+  static String cloudLayers(Object? raw) {
+    final layers = jsonDecode(raw as String? ?? '[]') as List;
+    return jsonEncode(
+      layers.map((v) {
+        final m = Map<String, dynamic>.from(v as Map);
+        if (m['kind'] == 'photo') m['content'] = '';
+        return m;
+      }).toList(),
+    );
   }
 
   // ── 날짜 ────────────────────────────────────────
@@ -143,7 +166,8 @@ class RemoteStore {
   // 밀립니다 — 한국 시간 자정 직후에 기록한 전시가 서버에서 전날이 됩니다.
   // 관람일은 시각이 아니라 **날짜**이므로 로컬 달력 기준으로 자릅니다.
 
-  static String _date(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+  static String _date(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 

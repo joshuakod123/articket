@@ -6,6 +6,8 @@ import '../theme/app_text.dart';
 import 'frame_shapes.dart';
 import 'paper.dart';
 import 'poster.dart';
+import 'ticket_face.dart';
+import '../theme/ticket_design.dart';
 import 'print_box.dart';
 import 'ticket_clipper.dart' show Barcode;
 
@@ -55,6 +57,12 @@ class TicketFront extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ticket.design != TicketDesign.legacy) {
+      return _print(
+        ticket.frame.aspect,
+        DesignedTicketFace(ticket: ticket, tilt: tilt, compact: compact),
+      );
+    }
     return _print(
       ticket.frame.aspect,
       ClipPath(
@@ -78,7 +86,10 @@ class TicketFront extends StatelessWidget {
         Expanded(
           flex: f.flexPoster,
           child: f.matted
-              ? Padding(padding: const EdgeInsets.all(12), child: _posterBlock())
+              ? Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _posterBlock(),
+                )
               : _posterBlock(),
         ),
         if (f.hasPerforation)
@@ -100,8 +111,7 @@ class TicketFront extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(flex: ticket.frame.flexPoster, child: _posterBlock()),
-        const PerforationLine(
-            color: AppColors.pulp, vertical: true, inset: 12),
+        const PerforationLine(color: AppColors.pulp, vertical: true, inset: 12),
         Expanded(
           flex: 100 - ticket.frame.flexPoster,
           child: Padding(
@@ -132,7 +142,8 @@ class TicketFront extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.clip,
                     style: AppText.eyebrow(
-                        color: AppColors.stock.withValues(alpha: .85)),
+                      color: AppColors.stock.withValues(alpha: .85),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -143,7 +154,8 @@ class TicketFront extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
                     style: AppText.eyebrow(
-                        color: AppColors.stock.withValues(alpha: .85)),
+                      color: AppColors.stock.withValues(alpha: .85),
+                    ),
                   ),
                 ),
               ],
@@ -225,7 +237,10 @@ class _Stub extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppText.data(
-                      size: 8, spacing: 0.6, color: AppColors.inkSoft),
+                    size: 8,
+                    spacing: 0.6,
+                    color: AppColors.inkSoft,
+                  ),
                 ),
               ],
             ),
@@ -245,8 +260,7 @@ class _Stub extends StatelessWidget {
       Text(
         label,
         maxLines: 1,
-        style: AppText.eyebrow(
-            color: AppColors.inkSoft.withValues(alpha: .6)),
+        style: AppText.eyebrow(color: AppColors.inkSoft.withValues(alpha: .6)),
       ),
       const SizedBox(height: 2),
       Text(
@@ -343,6 +357,9 @@ class TicketBack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ticket.design != TicketDesign.legacy) {
+      return _print(ticket.frame.aspect, DesignedTicketBack(ticket: ticket));
+    }
     return _print(
       ticket.frame.aspect,
       ClipPath(
@@ -373,7 +390,9 @@ class TicketBack extends StatelessWidget {
           const SizedBox(height: 14),
           Container(height: 1, color: AppColors.line),
           const SizedBox(height: 12),
-          Expanded(child: FittedParagraph(text: ticket.note, style: _note)),
+          Expanded(
+            child: FittedParagraph(text: ticket.note, style: _note),
+          ),
           const SizedBox(height: 8),
           _footer(),
         ],
@@ -397,8 +416,10 @@ class TicketBack extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text('DIARY',
-                        style: AppText.eyebrow(color: AppColors.oxblood)),
+                    Text(
+                      'DIARY',
+                      style: AppText.eyebrow(color: AppColors.oxblood),
+                    ),
                     const SizedBox(width: 10),
                     _Stars(rating: ticket.rating),
                   ],
@@ -451,8 +472,7 @@ class TicketBack extends StatelessWidget {
           'NO. ${ticket.serial.split('-').last}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style:
-          AppText.data(size: 9, spacing: 0.6, color: AppColors.inkSoft),
+          style: AppText.data(size: 9, spacing: 0.6, color: AppColors.inkSoft),
         ),
       ),
     ],
@@ -460,9 +480,10 @@ class TicketBack extends StatelessWidget {
 
   Widget _footer() => Row(
     children: [
-      Text('WITH',
-          style: AppText.eyebrow(
-              color: AppColors.inkSoft.withValues(alpha: .6))),
+      Text(
+        'WITH',
+        style: AppText.eyebrow(color: AppColors.inkSoft.withValues(alpha: .6)),
+      ),
       const SizedBox(width: 8),
       Flexible(
         child: Text(
@@ -495,9 +516,13 @@ class TicketBack extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(label,
-          style: AppText.eyebrow(
-              size: 8, color: AppColors.inkSoft.withValues(alpha: .6))),
+      Text(
+        label,
+        style: AppText.eyebrow(
+          size: 8,
+          color: AppColors.inkSoft.withValues(alpha: .6),
+        ),
+      ),
       const SizedBox(height: 3),
       Text(
         value,
@@ -505,16 +530,16 @@ class TicketBack extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: mono
             ? AppText.data(
-            size: 11,
-            spacing: 0.6,
-            weight: FontWeight.w700,
-            color: AppColors.ink)
+                size: 11,
+                spacing: 0.6,
+                weight: FontWeight.w700,
+                color: AppColors.ink,
+              )
             : AppText.ui(size: 11, color: AppColors.ink),
       ),
     ],
   );
 }
-
 
 class _Stars extends StatelessWidget {
   const _Stars({required this.rating});

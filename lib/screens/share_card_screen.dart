@@ -9,6 +9,7 @@ import '../widgets/paper.dart';
 import '../widgets/stacking_loader.dart';
 import '../widgets/paper_toast.dart';
 import '../widgets/scaled_canvas.dart';
+import '../widgets/brand_logo.dart';
 import '../widgets/scrapbook.dart' show WashiTape;
 
 /// 공유 카드 용지.
@@ -17,6 +18,8 @@ import '../widgets/scrapbook.dart' show WashiTape;
 /// 전시 도록에서 실제로 쓰는 지질을 여덟 장으로 늘리고, 글자색은 종이마다
 /// 대비가 확실한 값으로 미리 짝지어 둡니다. (사용자가 고를 일이 없게)
 enum ShareStock {
+  lavender('라벤더', AppColors.lavender, AppColors.ink),
+  butter('버터', AppColors.butter, AppColors.ink),
   cream('미색', Color(0xFFFCF8EE), Color(0xFF251E15)),
   sand('모래', Color(0xFFE0CFA8), Color(0xFF3A2E1E)),
   kraft('크라프트', Color(0xFFC9B18B), Color(0xFF33261A)),
@@ -34,9 +37,9 @@ enum ShareStock {
 
   bool get isDark =>
       this == ShareStock.olive ||
-          this == ShareStock.navy ||
-          this == ShareStock.oxblood ||
-          this == ShareStock.ink;
+      this == ShareStock.navy ||
+      this == ShareStock.oxblood ||
+      this == ShareStock.ink;
 }
 
 /// 카드 위에 얹는 소품 하나.
@@ -134,7 +137,7 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
 
   final _boundary = GlobalKey();
 
-  ShareStock _stock = ShareStock.cream;
+  ShareStock _stock = ShareStock.lavender;
   FolderTexture? _grain = FolderTexture.kraft;
   ShareTrim _trim = ShareTrim.tape;
   ShareInk _ink = ShareInk.auto;
@@ -157,8 +160,9 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
     } catch (e) {
       // 사용자에게는 사람 말로, 콘솔에는 원문 그대로.
       debugPrint('share card failed: $e');
-      if (mounted) PaperToast.warn(context, '카드를 내보내지 못했어요',
-          detail: '잠시 뒤에 다시 눌러 주세요');
+      if (mounted) {
+        PaperToast.warn(context, '카드를 내보내지 못했어요', detail: '잠시 뒤에 다시 눌러 주세요');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -168,8 +172,10 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('SHARE',
-            style: AppText.eyebrow(size: 12, color: AppColors.ink)),
+        title: Text(
+          'SHARE',
+          style: AppText.eyebrow(size: 12, color: AppColors.ink),
+        ),
       ),
       body: Column(
         children: [
@@ -180,8 +186,9 @@ class _ShareCardScreenState extends State<ShareCardScreen> {
                 child: AspectRatio(
                   aspectRatio: 9 / 16,
                   child: DecoratedBox(
-                    decoration:
-                    BoxDecoration(boxShadow: paperShadow(depth: 1.1)),
+                    decoration: BoxDecoration(
+                      boxShadow: paperShadow(depth: 1.1),
+                    ),
                     // 이 경계 안쪽만 이미지로 떠집니다.
                     child: RepaintBoundary(
                       key: _boundary,
@@ -300,12 +307,12 @@ class _Card extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text('ARTICKET',
-                      style: AppText.wordmark(
-                          size: 13, color: onPaper, spacing: 5)),
+                  ArticketLogo(height: 14, color: onPaper),
                   const Spacer(),
-                  Text('TICKET DIARY',
-                      style: AppText.eyebrow(size: 8, color: faint)),
+                  Text(
+                    'TICKET DIARY',
+                    style: AppText.eyebrow(size: 8, color: faint),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -345,9 +352,11 @@ class _Card extends StatelessWidget {
                     ),
                     if (meta.isNotEmpty) ...[
                       const SizedBox(width: 10),
-                      Text(meta,
-                          maxLines: 1,
-                          style: AppText.data(size: 10, color: faint)),
+                      Text(
+                        meta,
+                        maxLines: 1,
+                        style: AppText.data(size: 10, color: faint),
+                      ),
                     ],
                   ],
                 ),
@@ -411,11 +420,7 @@ class _PhotoCornerPainter extends CustomPainter {
       canvas.drawPath(path..close(), p);
     }
 
-    corner([
-      const Offset(0, 0),
-      const Offset(s, 0),
-      const Offset(0, s),
-    ]);
+    corner([const Offset(0, 0), const Offset(s, 0), const Offset(0, s)]);
     corner([
       Offset(size.width, 0),
       Offset(size.width - s, 0),
@@ -446,7 +451,8 @@ class _RubberStamp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final date = '${now.year}.'
+    final date =
+        '${now.year}.'
         '${now.month.toString().padLeft(2, '0')}.'
         '${now.day.toString().padLeft(2, '0')}';
 
@@ -466,12 +472,12 @@ class _RubberStamp extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('VISITED',
-                    style: AppText.eyebrow(size: 8, color: color)),
+                Text('VISITED', style: AppText.eyebrow(size: 8, color: color)),
                 const SizedBox(height: 3),
-                Text(date,
-                    style: AppText.data(
-                        size: 9, spacing: 1.2, color: color)),
+                Text(
+                  date,
+                  style: AppText.data(size: 9, spacing: 1.2, color: color),
+                ),
               ],
             ),
           ),
@@ -521,7 +527,7 @@ class _Bottom extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stock,
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
       child: SafeArea(
@@ -547,7 +553,7 @@ class _Bottom extends StatelessWidget {
                               border: Border(
                                 bottom: BorderSide(
                                   color: i == tab
-                                      ? AppColors.oxblood
+                                      ? AppColors.accent
                                       : AppColors.line,
                                   width: i == tab ? 1.8 : 1,
                                 ),
@@ -563,7 +569,7 @@ class _Bottom extends StatelessWidget {
                                       ? FontWeight.w600
                                       : FontWeight.w400,
                                   color: i == tab
-                                      ? AppColors.oxblood
+                                      ? AppColors.accent
                                       : AppColors.inkSoft,
                                 ),
                               ),
@@ -579,11 +585,7 @@ class _Bottom extends StatelessWidget {
                 height: 78,
                 child: switch (tab) {
                   0 => _StockRow(stock: stock, onPick: onStock),
-                  1 => _GrainRow(
-                    stock: stock,
-                    grain: grain,
-                    onPick: onGrain,
-                  ),
+                  1 => _GrainRow(stock: stock, grain: grain, onPick: onGrain),
                   2 => _TrimRow(trim: trim, onPick: onTrim),
                   _ => _InkRow(
                     stock: stock,
@@ -601,7 +603,7 @@ class _Bottom extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: busy ? null : onShare,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.oxblood,
+                      backgroundColor: AppColors.accent,
                       foregroundColor: AppColors.stockLight,
                       shape: const RoundedRectangleBorder(),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -610,13 +612,15 @@ class _Bottom extends StatelessWidget {
                     // 버튼 안이라 라벨 없이 뭉치만 씁니다.
                     icon: busy
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: StackingLoader(size: 20),
-                    )
+                            width: 20,
+                            height: 20,
+                            child: StackingLoader(size: 20),
+                          )
                         : const Icon(Icons.ios_share, size: 17),
-                    label: Text(busy ? '만드는 중' : '내보내기',
-                        style: AppText.ui(size: 14, weight: FontWeight.w600)),
+                    label: Text(
+                      busy ? '만드는 중' : '내보내기',
+                      style: AppText.ui(size: 14, weight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ),
@@ -737,12 +741,12 @@ class _GrainRow extends StatelessWidget {
                     child: g.$1 == null
                         ? ColoredBox(color: stock.paper)
                         : FolderSurface(
-                      color: stock.paper,
-                      texture: g.$1!,
-                      seed: 4,
-                      wear: 0.4,
-                      child: const SizedBox.expand(),
-                    ),
+                            color: stock.paper,
+                            texture: g.$1!,
+                            seed: 4,
+                            wear: 0.4,
+                            child: const SizedBox.expand(),
+                          ),
                   ),
                   const SizedBox(height: 6),
                   _SwatchLabel(g.$2, active: g.$1 == grain),
@@ -778,10 +782,10 @@ class _TrimRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: t == trim
-                      ? AppColors.oxblood.withValues(alpha: 0.08)
+                      ? AppColors.accent.withValues(alpha: 0.08)
                       : null,
                   border: Border.all(
-                    color: t == trim ? AppColors.oxblood : AppColors.line,
+                    color: t == trim ? AppColors.accent : AppColors.line,
                     width: t == trim ? 1.4 : 1,
                   ),
                 ),
@@ -791,7 +795,7 @@ class _TrimRow extends StatelessWidget {
                     size: 12,
                     height: 1.0,
                     weight: t == trim ? FontWeight.w600 : FontWeight.w400,
-                    color: t == trim ? AppColors.oxblood : AppColors.inkSoft,
+                    color: t == trim ? AppColors.accent : AppColors.inkSoft,
                   ),
                 ),
               ),
@@ -801,6 +805,7 @@ class _TrimRow extends StatelessWidget {
     );
   }
 }
+
 /// 소품을 찍을 잉크 색.
 ///
 /// 견본은 **지금 고른 종이 위에** 찍어 보여줍니다. 색 동그라미만 늘어놓으면
@@ -866,8 +871,7 @@ class _InkRow extends StatelessWidget {
                               height: 7,
                               decoration: BoxDecoration(
                                 border: Border.all(
-                                  color:
-                                  i.on(stock).withValues(alpha: 0.88),
+                                  color: i.on(stock).withValues(alpha: 0.88),
                                   width: 0.8,
                                 ),
                               ),

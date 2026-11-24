@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/ticket_store.dart';
 import '../models/layer.dart';
+import '../services/poster_storage.dart';
 import '../models/ticket.dart';
 import '../services/guide_service.dart';
 import '../theme/app_colors.dart';
@@ -188,7 +189,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('EDITOR'),
+            title: const Text('티켓 꾸미기'),
             actions: [
               _HistoryButton(
                 icon: Icons.undo,
@@ -205,9 +206,7 @@ class _EditorScreenState extends State<EditorScreen> {
               // 눈금을 끄면 완전 자유각이 됩니다. 정밀 배치를 원하는
               // 사용자를 위한 탈출구입니다.
               _HistoryButton(
-                icon: _snap.enabled
-                    ? Icons.grid_on
-                    : Icons.grid_off,
+                icon: _snap.enabled ? Icons.grid_on : Icons.grid_off,
                 tooltip: _snap.enabled ? '눈금 끄기' : '눈금 켜기',
                 enabled: true,
                 onTap: () {
@@ -221,11 +220,14 @@ class _EditorScreenState extends State<EditorScreen> {
               const SizedBox(width: 4),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text('완료',
-                    style: AppText.ui(
-                        size: 14,
-                        weight: FontWeight.w600,
-                        color: AppColors.oxblood)),
+                child: Text(
+                  '완료',
+                  style: AppText.ui(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: AppColors.accent,
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
             ],
@@ -243,7 +245,9 @@ class _EditorScreenState extends State<EditorScreen> {
                       Center(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 40, vertical: 28),
+                            horizontal: 40,
+                            vertical: 28,
+                          ),
                           child: AspectRatio(
                             key: _canvasKey,
                             aspectRatio: ticket.frame.aspect,
@@ -280,8 +284,13 @@ class _EditorScreenState extends State<EditorScreen> {
                                         canvas: canvas,
                                         selected: _selectedId == layer.id,
                                         onSelect: () {
-                                          setState(() => _selectedId = layer.id);
-                                          store.bringToFront(ticket.id, layer.id);
+                                          setState(
+                                            () => _selectedId = layer.id,
+                                          );
+                                          store.bringToFront(
+                                            ticket.id,
+                                            layer.id,
+                                          );
                                         },
                                         dragging: _draggingId == layer.id,
                                         onScaleStart: () {
@@ -291,18 +300,25 @@ class _EditorScreenState extends State<EditorScreen> {
                                           _startRotation = layer.rotation;
                                           Feel.lift();
                                           setState(
-                                                  () => _draggingId = layer.id);
+                                            () => _draggingId = layer.id,
+                                          );
                                         },
                                         onScaleUpdate: (details) {
                                           // 1) 손가락이 민 만큼 날것으로 옮깁니다.
-                                          final rawX = (layer.dx +
-                                              details.focalPointDelta.dx /
-                                                  canvas.width)
-                                              .clamp(0.0, 1.0);
-                                          final rawY = (layer.dy +
-                                              details.focalPointDelta.dy /
-                                                  canvas.height)
-                                              .clamp(0.0, 1.0);
+                                          final rawX =
+                                              (layer.dx +
+                                                      details
+                                                              .focalPointDelta
+                                                              .dx /
+                                                          canvas.width)
+                                                  .clamp(0.0, 1.0);
+                                          final rawY =
+                                              (layer.dy +
+                                                      details
+                                                              .focalPointDelta
+                                                              .dy /
+                                                          canvas.height)
+                                                  .clamp(0.0, 1.0);
 
                                           var rawScale = layer.scale;
                                           var rawRotation = layer.rotation;
@@ -313,7 +329,8 @@ class _EditorScreenState extends State<EditorScreen> {
                                             rawScale =
                                                 (_startScale * details.scale)
                                                     .clamp(0.3, 4.0);
-                                            rawRotation = _startRotation +
+                                            rawRotation =
+                                                _startRotation +
                                                 details.rotation;
                                           }
 
@@ -326,7 +343,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                             scale: rawScale,
                                             scaleGuides: [
                                               for (final l in ticket.layers)
-                                                if (l.id != layer.id) l.scale
+                                                if (l.id != layer.id) l.scale,
                                             ],
                                             snapRotation: twoFinger,
                                             snapScale: twoFinger,
@@ -375,7 +392,9 @@ class _EditorScreenState extends State<EditorScreen> {
                               '아래에서 하나 골라 붙여보세요',
                               textAlign: TextAlign.center,
                               style: AppText.ui(
-                                  size: 11.5, color: AppColors.pulp),
+                                size: 11.5,
+                                color: AppColors.pulp,
+                              ),
                             ),
                           ),
                         ),
@@ -428,30 +447,34 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _addSticker() async {
     final picked = await pickSticker(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.sticker,
-      content: picked.content,
-      dx: 0.5,
-      dy: 0.4,
-      color: picked.color.toARGB32(),
-      fontSize: 18,
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.sticker,
+        content: picked.content,
+        dx: 0.5,
+        dy: 0.4,
+        color: picked.color.toARGB32(),
+        fontSize: 18,
+      ),
+    );
   }
 
   Future<void> _addText() async {
     final picked = await editScrapText(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.text,
-      content: picked.text,
-      dx: 0.5,
-      dy: 0.35,
-      color: picked.color.toARGB32(),
-      fontSize: picked.size,
-      font: picked.font.name,
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.text,
+        content: picked.text,
+        dx: 0.5,
+        dy: 0.35,
+        color: picked.color.toARGB32(),
+        fontSize: picked.size,
+        font: picked.font.name,
+      ),
+    );
   }
 
   /// 도장은 **크기 자체가 표현**이라, 시트에서 고른 지름을 fontSize에 담습니다.
@@ -459,32 +482,36 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _addStamp() async {
     final picked = await pickStamp(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.stamp,
-      content: picked.spec.encode(),
-      dx: 0.72,
-      dy: 0.72,
-      // 반듯한 도장은 없습니다. 살짝 비뚤게 찍힙니다.
-      rotation: -0.14,
-      color: picked.color.toARGB32(),
-      fontSize: picked.size,
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.stamp,
+        content: picked.spec.encode(),
+        dx: 0.72,
+        dy: 0.72,
+        // 반듯한 도장은 없습니다. 살짝 비뚤게 찍힙니다.
+        rotation: -0.14,
+        color: picked.color.toARGB32(),
+        fontSize: picked.size,
+      ),
+    );
     Feel.stamp(); // 붙인 게 아니라 찍은 것. 손끝에도 그렇게 전합니다.
   }
 
   Future<void> _addTape() async {
     final picked = await pickTape(context);
     if (picked == null) return;
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.tape,
-      content: picked.pattern.name,
-      dx: 0.34,
-      dy: 0.22,
-      rotation: -0.3,
-      color: picked.color.toARGB32(),
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.tape,
+        content: picked.pattern.name,
+        dx: 0.34,
+        dy: 0.22,
+        rotation: -0.3,
+        color: picked.color.toARGB32(),
+      ),
+    );
   }
 
   /// 폴라로이드 붙이기.
@@ -503,19 +530,20 @@ class _EditorScreenState extends State<EditorScreen> {
     // 빈 폴라로이드를 몰래 붙여 놓으면 사용자가 지워야 합니다.
     if (source != PhotoSource.blank && path == null) return;
 
-    _place(ScrapLayer(
-      id: _uuid.v4(),
-      kind: LayerKind.photo,
-      content: path ?? '',
-      dx: 0.68,
-      dy: 0.6,
-      rotation: 0.12,
-      color: AppColors.oxbloodDim.toARGB32(),
-    ));
+    _place(
+      ScrapLayer(
+        id: _uuid.v4(),
+        kind: LayerKind.photo,
+        content: path ?? '',
+        dx: 0.68,
+        dy: 0.6,
+        rotation: 0.12,
+        color: AppColors.oxbloodDim.toARGB32(),
+      ),
+    );
 
     if (path == null || path.isEmpty) {
-      PaperToast.show(context, '빈 폴라로이드를 한 장 붙였어요',
-          detail: '두 번 누르면 사진이 들어가요');
+      PaperToast.show(context, '빈 폴라로이드를 한 장 붙였어요', detail: '두 번 누르면 사진이 들어가요');
     }
   }
 
@@ -530,12 +558,13 @@ class _EditorScreenState extends State<EditorScreen> {
         maxWidth: 1400,
         imageQuality: 88,
       );
-      return shot?.path;
+      return shot == null
+          ? null
+          : await PosterStorage.instance.adopt(shot.path, _uuid.v4());
     } catch (e) {
       debugPrint('image pick failed: $e');
       if (mounted) {
-        PaperToast.warn(context, '사진을 불러오지 못했어요',
-            detail: '앨범 접근 권한을 확인해 주세요');
+        PaperToast.warn(context, '사진을 불러오지 못했어요', detail: '앨범 접근 권한을 확인해 주세요');
       }
       return null;
     }
@@ -548,8 +577,7 @@ class _EditorScreenState extends State<EditorScreen> {
     store.removeLayer(widget.ticketId, layer.id);
     Feel.stamp();
     setState(() => _selectedId = null);
-    PaperToast.show(context, '붙였던 걸 하나 뗐어요',
-        detail: '위쪽 ↩︎ 를 누르면 돌아와요');
+    PaperToast.show(context, '붙였던 걸 하나 뗐어요', detail: '위쪽 ↩︎ 를 누르면 돌아와요');
   }
 
   /// 선택한 레이어를 한 칸(7.5°) 돌립니다.
@@ -642,6 +670,7 @@ class _EditorScreenState extends State<EditorScreen> {
         if (source != PhotoSource.blank && path == null) return;
         _snapshot();
         layer.content = path ?? '';
+        layer.photoKey = null;
     }
 
     store.touch();
@@ -656,16 +685,12 @@ class _EditorScreenState extends State<EditorScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.stockLight,
-      builder: (context) => TicketStyleSheet(
-        ticket: _ticket,
-        store: store,
-        initialTab: tab,
-      ),
+      builder: (context) =>
+          TicketStyleSheet(ticket: _ticket, store: store, initialTab: tab),
     );
   }
 
-  void _editInfo() =>
-      openRecordSheet(context, ticket: _ticket, store: store);
+  void _editInfo() => openRecordSheet(context, ticket: _ticket, store: store);
 }
 
 /// 앱바의 되돌리기 버튼. 쓸 수 없을 땐 흐려집니다.
@@ -733,7 +758,7 @@ class _LayerBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stock,
+        color: AppColors.surface,
         border: Border(
           top: BorderSide(color: AppColors.line),
           bottom: BorderSide(color: AppColors.line),
@@ -752,23 +777,38 @@ class _LayerBar extends StatelessWidget {
             // 버튼이 여섯 개라, 이름 쪽이 먼저 양보해야 좁은 화면에서
             // 노란 오버플로 줄무늬가 뜨지 않습니다.
             Flexible(
-              child: Text(_name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.ui(
-                      size: 12,
-                      weight: FontWeight.w600,
-                      color: AppColors.ink)),
+              child: Text(
+                _name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.ui(
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: AppColors.ink,
+                ),
+              ),
             ),
             const Spacer(),
-            _act(Icons.rotate_left, '왼쪽으로 돌리기', () => onRotate(-_step),
-                onLongPress: onStraighten),
-            _act(Icons.rotate_right, '오른쪽으로 돌리기', () => onRotate(_step),
-                onLongPress: onStraighten),
+            _act(
+              Icons.rotate_left,
+              '왼쪽으로 돌리기',
+              () => onRotate(-_step),
+              onLongPress: onStraighten,
+            ),
+            _act(
+              Icons.rotate_right,
+              '오른쪽으로 돌리기',
+              () => onRotate(_step),
+              onLongPress: onStraighten,
+            ),
             _act(Icons.tune, '고치기', onEdit),
             _act(Icons.copy_all_outlined, '복제', onDuplicate),
-            _act(Icons.delete_outline, '떼어내기', onDelete,
-                color: AppColors.oxblood),
+            _act(
+              Icons.delete_outline,
+              '떼어내기',
+              onDelete,
+              color: AppColors.accent,
+            ),
             _act(Icons.check, '완료', onDone),
           ],
         ),
@@ -776,8 +816,13 @@ class _LayerBar extends StatelessWidget {
     );
   }
 
-  Widget _act(IconData icon, String tip, VoidCallback onTap,
-      {Color? color, VoidCallback? onLongPress}) {
+  Widget _act(
+    IconData icon,
+    String tip,
+    VoidCallback onTap, {
+    Color? color,
+    VoidCallback? onLongPress,
+  }) {
     final button = IconButton(
       tooltip: tip,
       onPressed: onTap,
@@ -890,7 +935,7 @@ class _EditableLayer extends StatelessWidget {
                       top: 0,
                       child: _Handle(
                         icon: Icons.close,
-                        color: AppColors.oxblood,
+                        color: AppColors.accent,
                         scale: _handleScale,
                         onTap: onDelete,
                       ),
@@ -1002,7 +1047,7 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.stock,
+        color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
       child: Stack(
@@ -1040,22 +1085,38 @@ class _Toolbar extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _tool(Icons.crop_free, '프레임', onFrame, toolWidth),
-                        _tool(Icons.wallpaper_outlined, '포스터', onPoster,
-                            toolWidth),
+                        _tool(
+                          Icons.wallpaper_outlined,
+                          '포스터',
+                          onPoster,
+                          toolWidth,
+                        ),
                       ],
                     ),
                     Row(
                       key: decorateKey,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _tool(Icons.auto_awesome_outlined, '스티커', onSticker,
-                            toolWidth),
-                        _tool(Icons.approval_outlined, '도장', onStamp,
-                            toolWidth),
+                        _tool(
+                          Icons.auto_awesome_outlined,
+                          '스티커',
+                          onSticker,
+                          toolWidth,
+                        ),
+                        _tool(
+                          Icons.approval_outlined,
+                          '도장',
+                          onStamp,
+                          toolWidth,
+                        ),
                         _tool(Icons.text_fields, '글자', onText, toolWidth),
                         _tool(Icons.horizontal_rule, '테이프', onTape, toolWidth),
-                        _tool(Icons.photo_outlined, '폴라로이드', onPhoto,
-                            toolWidth),
+                        _tool(
+                          Icons.photo_outlined,
+                          '폴라로이드',
+                          onPhoto,
+                          toolWidth,
+                        ),
                       ],
                     ),
                     Row(
@@ -1069,15 +1130,17 @@ class _Toolbar extends StatelessWidget {
                 );
 
                 const padding = EdgeInsets.symmetric(
-                    horizontal: hPad, vertical: 6);
+                  horizontal: hPad,
+                  vertical: 6,
+                );
 
                 return fits
                     ? Padding(padding: padding, child: row)
                     : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: padding,
-                  child: row,
-                );
+                        scrollDirection: Axis.horizontal,
+                        padding: padding,
+                        child: row,
+                      );
               },
             ),
           ),
@@ -1090,12 +1153,7 @@ class _Toolbar extends StatelessWidget {
   ///
   /// 「폴라로이드」처럼 긴 이름은 칸보다 넓어질 수 있어서, 라벨만
   /// [FittedBox] 로 눌러 담습니다. 아이콘 크기는 건드리지 않습니다.
-  Widget _tool(
-      IconData icon,
-      String label,
-      VoidCallback onTap,
-      double width,
-      ) =>
+  Widget _tool(IconData icon, String label, VoidCallback onTap, double width) =>
       SizedBox(
         width: width,
         child: InkWell(
