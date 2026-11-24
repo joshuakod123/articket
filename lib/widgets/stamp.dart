@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../theme/app_text.dart';
 
@@ -385,10 +385,11 @@ class _StampPainter extends CustomPainter {
       }) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
-      textAlign: TextAlign.center,
-      textDirection: TextDirection.ltr,
       maxLines: 3,
-    )..layout();
+    )
+      ..textAlign = TextAlign.center
+      ..textDirection = TextDirection.ltr
+      ..layout();
 
     final k = math.min(1.0, math.min(box.width / tp.width, box.height / tp.height));
 
@@ -397,6 +398,7 @@ class _StampPainter extends CustomPainter {
     canvas.scale(k);
     tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
     canvas.restore();
+    tp.dispose();
   }
 
   /// 원 둘레를 따라 한 글자씩 돌려 찍습니다.
@@ -422,8 +424,9 @@ class _StampPainter extends CustomPainter {
       for (final c in chars)
         TextPainter(
           text: TextSpan(text: c, style: style),
-          textDirection: TextDirection.ltr,
-        )..layout()
+        )
+          ..textDirection = TextDirection.ltr
+          ..layout()
     ];
     final widths = painters.map((p) => p.width + unit * 0.045).toList();
     final total = widths.fold<double>(0, (a, b) => a + b);
@@ -446,6 +449,9 @@ class _StampPainter extends CustomPainter {
       canvas.restore();
 
       angle += up ? step : -step;
+    }
+    for (final painter in painters) {
+      painter.dispose();
     }
   }
 

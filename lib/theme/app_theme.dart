@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+
 import 'app_colors.dart';
 import 'app_text.dart';
 
@@ -23,8 +24,7 @@ class AppTheme {
         surface: AppColors.surface,
         onSurface: AppColors.ink,
         error: AppColors.danger,
-        outline: AppColors.line,
-      ),
+      ).copyWith(outline: AppColors.line),
       textTheme: base.textTheme.apply(
         bodyColor: AppColors.ink,
         displayColor: AppColors.ink,
@@ -108,12 +108,8 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: shape,
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        },
-      ),
+      // Use Flutter's platform transitions, including Android predictive back.
+      pageTransitionsTheme: const PageTransitionsTheme(),
     );
   }
 }

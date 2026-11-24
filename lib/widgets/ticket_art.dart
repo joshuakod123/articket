@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../theme/ticket_design.dart';
 
 /// Original vector poster art. User-selected photos replace it without a network request.

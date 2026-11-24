@@ -46,3 +46,4 @@ app.*.map.json
 
 # Local review artifacts and real Flutter preview exports.
 work/
+.fvm/

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Interface tokens are independent of the paper used by saved collectibles.
 class AppColors {
