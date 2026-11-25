@@ -12,7 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   material_ui: ^1.11.1
-  sensors_plus: ^5.0.1      # 자이로 홀로그램 반응 (없어도 앱은 동작)
+  sensors_plus: ^7.1.1      # iOS SwiftPM support and optional gyroscope response
   uuid: ^4.4.0
   image_picker: ^1.1.2
   share_plus: ^11.0.0

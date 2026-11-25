@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../data/sync_service.dart';
 import '../data/supabase_env.dart';
 import '../services/auth_service.dart';
@@ -14,48 +15,13 @@ import 'onboarding/welcome_tour.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
   Future<void> rename(BuildContext context) async {
-    final controller = TextEditingController(
-      text: AuthService.instance.viewer?.name ?? '',
-    );
     final name = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (c) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          16,
-          24,
-          MediaQuery.viewInsetsOf(c).bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('이름 바꾸기', style: AppText.display(size: 22)),
-            const SizedBox(height: 24),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLength: 30,
-              decoration: const InputDecoration(labelText: '이름'),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  if (controller.text.trim().isNotEmpty) {
-                    Navigator.pop(c, controller.text.trim());
-                  }
-                },
-                child: const Text('저장'),
-              ),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) =>
+          _RenameSheet(initialName: AuthService.instance.viewer?.name ?? ''),
     );
-    controller.dispose();
     if (name != null) await AuthService.instance.rename(name);
   }
 
@@ -232,6 +198,70 @@ class SettingsScreen extends StatelessWidget {
           ],
         );
       },
+    ),
+  );
+}
+
+/// The route keeps this state alive until its closing animation is complete.
+class _RenameSheet extends StatefulWidget {
+  const _RenameSheet({required this.initialName});
+  final String initialName;
+
+  @override
+  State<_RenameSheet> createState() => _RenameSheetState();
+}
+
+class _RenameSheetState extends State<_RenameSheet> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = '이름을 입력해 주세요');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(name);
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: EdgeInsets.fromLTRB(
+      24,
+      16,
+      24,
+      MediaQuery.viewInsetsOf(context).bottom + 24,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('이름 바꾸기', style: AppText.display(size: 22)),
+        const SizedBox(height: 24),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLength: 30,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+          decoration: InputDecoration(labelText: '이름', errorText: _error),
+        ),
+        const SizedBox(height: 20),
+        FilledButton(onPressed: _submit, child: const Text('저장')),
+      ],
     ),
   );
 }
